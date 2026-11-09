@@ -6,7 +6,7 @@
 
 LabelPlus-Nondum 是一个 Photoshop 插件（UXP），用来把 LabelPlus 翻译稿嵌进漫画图片：一次生成整章 PSD，文字按 LabelPlus 的分组套用样式，居中进气泡，并可以把气泡里的原文涂白。
 
-它杂交并魔改了 [TypeR](https://github.com/ScanR/TypeR) [LabelPlus](https://github.com/LabelPlus/LabelPlus) 和它的 [PS-Script](https://github.com/LabelPlus/PS-Script)。
+它杂交并魔改了 [TypeR](https://github.com/ScanR/TypeR) 和 [LabelPlus](https://github.com/LabelPlus/LabelPlus) 以及它的 [PS-Script](https://github.com/LabelPlus/PS-Script)。
 
 ## 功能
 
