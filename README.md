@@ -110,13 +110,6 @@ irm https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.ps1 | i
 </details>
 
 <details>
-<summary><strong>别人分享的样式字体不对</strong></summary>
-
-字体要在你的电脑上安装。导出样式时可以把字体文件一起打包（字体的授权允许时）。
-
-</details>
-
-还有问题，请到 [issues](https://github.com/Dryiceee/LabelPlus-Nondum/issues/new) 提交，写明 LabelPlus-Nondum、Photoshop 和系统的版本，重现问题的步骤，预期和实际的结果，必要时附截图或录屏。
 
 ## 从源码构建
 
