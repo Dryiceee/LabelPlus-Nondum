@@ -1,0 +1,161 @@
+<p align="center">
+  <img src="./icons_src/logo-512.png" width="160" alt="LabelPlus-Nondum">
+</p>
+
+# LabelPlus-Nondum
+
+LabelPlus-Nondum 是一个 Photoshop 插件（UXP），用来把 LabelPlus 翻译稿嵌进漫画图片：一次生成整章 PSD，文字按 LabelPlus 的分组套用样式，居中进气泡，并可以把气泡里的原文涂白。
+
+它建立在 [TypeR](https://github.com/ScanR/TypeR) 之上，导入方式参考了 [LabelPlus](https://github.com/LabelPlus/LabelPlus) 和它的 [PS-Script](https://github.com/LabelPlus/PS-Script)。
+
+## 功能
+
+- **导入 LabelPlus 翻译稿：** 读取 LabelPlus 导出的文本，自动找到图源文件夹并匹配图片。可以只选部分图片，支持按 Ctrl 或 Shift 多选、全选和全不选。
+- **分组和样式：** 每个 LabelPlus 分组建一个图层组，每个分组单独选一个样式。文字一律是直排的点文本，并保留译者的换行。
+- **气泡内居中：** 从标号点取样找到气泡，把文字放到气泡中心。尾巴不会把文字带偏，连体气泡会按标号点把文字分进各自的气泡室。文字放不下时不缩字号，超出气泡也保持居中。
+- **涂白：** 把气泡连同原文一起填成气泡本身的颜色，涂在单独的 `LabelPlus Clean` 图层上。网点、渐变或灰色的气泡，以及里面还有别的气泡或画面的区域，不会被涂。
+- **文本替换：** 可以勾选常用替换（如 `！？` 换成 `!?`），也能添加自己的替换规则。
+- **主面板的 Align：** 选中一个或多个文字图层，按各自的中心点逐个居中进气泡。
+- **样式：** 支持描边和全部图层样式（投影、内阴影、外发光等）。可以从选中的文字图层直接新建样式，也可以按文件夹整理、导入导出，与汉化组成员共享。
+- **处理报告：** 每次运行后列出没有找到气泡、没有涂白等需要人工检查的地方。
+
+## 安装
+
+需要 Windows 或 macOS 上的标准桌面版 Photoshop 2025（26.0）或更新版本；便携版、精简版可能删掉了插件支持，面板会打不开。可以和 TypeR 同时安装，但不要同时打开两个面板，否则每个快捷键都会执行两次。
+
+### 一行命令安装
+
+先关闭 Photoshop。Windows 在 PowerShell 里粘贴并回车：
+
+```powershell
+irm https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.ps1 | iex
+```
+
+macOS 在“终端”里粘贴并回车：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.sh | bash
+```
+
+脚本会下载最新版，校验后直接装进 Photoshop 的插件文件夹，不需要 Creative Cloud。装好后在“增效工具 > LabelPlus-Nondum”打开面板。
+
+<details>
+<summary><strong>离线安装包</strong></summary>
+
+1. 下载 [`LabelPlus-Nondum.zip`](https://github.com/Dryiceee/LabelPlus-Nondum/releases/latest/download/LabelPlus-Nondum.zip) 并完整解压。
+2. 关闭 Photoshop，Windows 双击 `install_win.cmd`，macOS 双击 `install_mac.command`。
+   - macOS 第一次会拦下这个脚本（它没有 Apple 签名）：点“完成”，到“系统设置 > 隐私与安全性”底部点“仍要打开”，再确认一次。也可以在终端里进入解压的文件夹，运行 `bash install_mac.command`。
+
+解压后的文件夹建议留着，以后可以用它更新。
+
+脚本可以加参数（Windows 在命令提示符里给 `install_win.cmd` 加，macOS 给 `install_mac.command` 加）：
+
+- `-Silent`（macOS 为 `--silent`）：不等待按键，适合批量部署。
+- 一个 `.ccx` 文件的路径：安装这个包，而不是离线包里自带的。
+- `-PhotoshopPath "E:\My Photoshop"`（仅 Windows）：Photoshop 装在脚本找不到的位置时，告诉脚本它在哪里。脚本会顺便更新放在这个 Photoshop 的 `Plug-ins` 文件夹里的副本。
+
+脚本只为当前用户安装，不需要管理员权限。它会先验证安装包里的每个文件，再替换旧版本；中途失败会自动恢复，其他插件的登记也不会动。
+
+</details>
+
+<details>
+<summary><strong>用 Creative Cloud 安装</strong></summary>
+
+下载对应系统的安装包，双击后由 Creative Cloud 完成安装：
+
+- Windows：[`LabelPlus-Nondum-win.ccx`](https://github.com/Dryiceee/LabelPlus-Nondum/releases/latest/download/LabelPlus-Nondum-win.ccx)
+- macOS：[`LabelPlus-Nondum-mac.ccx`](https://github.com/Dryiceee/LabelPlus-Nondum/releases/latest/download/LabelPlus-Nondum-mac.ccx)
+
+</details>
+
+<details>
+<summary><strong>手动放进 Photoshop 的 Plug-ins 文件夹</strong></summary>
+
+适合脚本运行不了的电脑，例如公司电脑禁止运行脚本。
+
+1. 下载对应系统的 `.ccx` 安装包（见上一项），把后缀改成 `.zip` 后解压。
+2. 把解压出来的文件夹改名为 `LabelPlus-Nondum`，放进 Photoshop 安装目录的 `Plug-ins` 文件夹。`manifest.json` 要直接位于 `LabelPlus-Nondum` 文件夹里，不能再套一层文件夹。
+   - Windows 一般是 `C:\Program Files\Adobe\Adobe Photoshop 2025\Plug-ins\`，写入这里需要管理员权限。
+   - macOS 一般是 `/Applications/Adobe Photoshop 2025/Plug-ins/`。
+3. 重启 Photoshop。
+
+这种方式只对放进去的那个 Photoshop 生效。更新时要换成新版本的文件夹，Windows 上也可以运行安装脚本，它会一并更新这份副本。
+
+</details>
+
+### macOS：允许快捷键
+
+在画布上按快捷键时，插件要靠一个小程序读取键盘。macOS 要求给 Photoshop 开“输入监控”权限，否则含字母、数字或符号的快捷键不会生效：
+
+“系统设置 > 隐私与安全性 > 输入监控”里点“+”，添加 Adobe Photoshop 并打开开关。插件发现缺少这个权限时，会在“设置 > 快捷键”里提供打开这个页面的按钮。
+
+### 更新
+
+1.0.0 不会自动检查更新。有新版本时，关闭 Photoshop 后再运行一次上面的一行命令即可；用离线包的话，Windows 双击 `installer\update_win.cmd`，macOS 在终端里运行 `bash installer/update_mac.sh`；也可以下载新的 `.ccx` 双击安装。
+
+样式和设置都会保留，它们存放在插件以外的位置：Windows 是 `%APPDATA%\LabelPlus-Nondum\UXP`，macOS 是 `~/Library/Application Support/LabelPlus-Nondum/UXP`。想另外备份，可以在“设置 > 数据”里导出。
+
+## 使用
+
+1. 点面板底部的 LabelPlus 按钮，打开导入窗口。
+2. 选择 LabelPlus 导出的文本文件，确认图源文件夹和输出文件夹。
+3. 在“分组和样式”里切换各个分组：选样式，并决定是否导入、是否居中、是否涂白。
+4. 选择要处理的图片：
+   - **生成 PSD：** 只放文字。
+   - **处理整章：** 放文字，再居中和涂白。
+   - **先在当前文档上试：** 对已经打开的文档试运行，不会保存。
+5. 看处理报告，逐条检查列出的标号。
+
+## 常见问题
+
+<details>
+<summary><strong>Photoshop 里找不到 LabelPlus-Nondum</strong></summary>
+
+1. 关闭所有 Photoshop 窗口，重新运行安装脚本。如果用的是离线包，先把它完整解压。
+2. 重启 Photoshop，在“增效工具 > LabelPlus-Nondum”里找。
+3. 确认 Photoshop 是 2025（26.0）或更新的标准桌面版。
+
+</details>
+
+<details>
+<summary><strong>面板打开后是空白的</strong></summary>
+
+插件的界面显示在 Photoshop 的网页组件（UXP WebView）里。网页组件 15 秒内没有响应时，面板会显示一段诊断信息，请把它连同 Photoshop 版本一起发到 issues。
+
+Windows 上，可能是 Adobe 自带的 WebView2 组件缺失或损坏，常见于不完整的 Photoshop 安装。它位于 `C:\Program Files\Common Files\Adobe\Microsoft\EdgeWebView\`。这时要修复 Photoshop 的安装，只重装插件解决不了。参见 [Adobe 的 UXP WebView 说明](https://helpx.adobe.com/creative-cloud/apps/integration-with-other-apps/manage-plugins/uxp-webview.html)。
+
+</details>
+
+<details>
+<summary><strong>macOS 上含字母或数字的快捷键没反应</strong></summary>
+
+给 Photoshop 开“输入监控”权限，见上方“macOS：允许快捷键”。
+
+</details>
+
+<details>
+<summary><strong>别人分享的样式字体不对</strong></summary>
+
+字体要在你的电脑上安装。导出样式时可以把字体文件一起打包（字体的授权允许时）。
+
+</details>
+
+还有问题，请到 [issues](https://github.com/Dryiceee/LabelPlus-Nondum/issues/new) 提交，写明 LabelPlus-Nondum、Photoshop 和系统的版本，重现问题的步骤，预期和实际的结果，必要时附截图或录屏。
+
+## 从源码构建
+
+```bash
+npm install
+npm test
+npm run package:release
+```
+
+安装包会生成在 `Releases/` 文件夹里。开发时可以用 `npm run build:uxp` 生成 `uxp/` 文件夹，再用 UXP Developer Tools 加载其中的 `manifest.json`。
+
+## 许可证与致谢
+
+本项目以 GNU GPL 第 2 版发布，详见 [LICENSE.md](LICENSE.md)。
+
+- [TypeR](https://github.com/ScanR/TypeR)，作者 Sakushi 和 SeanR（基于 Swirt 的 TypeR tools），MIT 许可证
+- [LabelPlus](https://github.com/LabelPlus/LabelPlus) 和 [PS-Script](https://github.com/LabelPlus/PS-Script)，GNU GPL 第 2 版
+- [hyphen](https://github.com/ytiurin/hyphen)，作者 Yevhen Tiurin，ISC 许可证

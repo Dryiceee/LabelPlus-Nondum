@@ -1,0 +1,63 @@
+{
+  "name": "labelplus-nondum",
+  "version": "1.0.0",
+  "author": "dryice",
+  "license": "GPL-2.0-only",
+  "main": "app/index.js",
+  "browserslist": [
+    "Chrome >= 41"
+  ],
+  "scripts": {
+    "test": "node scripts/runTests.js",
+    "build:uxp": "webpack --config webpack.uxp.config.js --mode=production && node scripts/buildUxp.js",
+    "build:uxp:dev": "webpack --config webpack.uxp.config.js --mode=development --env dev && node scripts/buildUxp.js --dev --package",
+    "build:uxp:mac": "webpack --config webpack.uxp.config.js --mode=production --env mac && node scripts/buildUxp.js --mac",
+    "build:uxp:mac:dev": "webpack --config webpack.uxp.config.js --mode=development --env mac --env dev && node scripts/buildUxp.js --mac --dev --package",
+    "package:uxp:win": "npm run build:uxp && node scripts/buildUxp.js --package && node scripts/verifyKeysAddonPackage.js --release",
+    "package:uxp:mac": "npm run build:uxp:mac && node scripts/buildUxp.js --mac --package",
+    "package:uxp": "npm run package:uxp:win && npm run package:uxp:mac && node scripts/verifyUxpPackages.js",
+    "package:release": "npm run package:uxp && node scripts/packageRelease.js",
+    "build:keys-addon": "node scripts/buildKeysAddon.js",
+    "test:keys-addon:native": "node scripts/testNativeKeysAddon.js --compile",
+    "test:uxp": "node scripts/testUxpHost.js && node scripts/testUxpPanelShim.js"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.15.4",
+    "core-js": "^3.49.0",
+    "css-vars-ponyfill": "^2.4.9",
+    "fflate": "^0.8.3",
+    "prop-types": "^15.7.2",
+    "react": "^17.0.2",
+    "react-color": "^2.19.3",
+    "react-dom": "^17.0.2",
+    "react-icons": "^5.5.0",
+    "resize-observer-polyfill": "^1.5.1",
+    "whatwg-fetch": "^3.6.20"
+  },
+  "devDependencies": {
+    "cssnano": "^7.1.9",
+    "postcss-preset-env": "^11.5.1",
+    "sass": "^1.89.0",
+    "sass-loader": "^16.0.8",
+    "@babel/core": "^7.15.5",
+    "@babel/plugin-transform-runtime": "^7.15.0",
+    "@babel/preset-env": "^7.15.6",
+    "@babel/preset-react": "^7.14.5",
+    "autoprefixer": "^10.3.6",
+    "babel-loader": "^8.2.2",
+    "base64-inline-loader": "^2.0.1",
+    "css-loader": "^6.3.0",
+    "file-loader": "^6.2.0",
+    "html-webpack-plugin": "^5.3.2",
+    "mini-css-extract-plugin": "^2.3.0",
+    "postcss-loader": "^6.1.1",
+    "uglify-js": "^3.14.2",
+    "webpack": "^5.54.0",
+    "webpack-cli": "^6.0.1",
+    "webpack-merge-and-include-globally": "^2.3.4",
+    "acorn": "^8.15.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

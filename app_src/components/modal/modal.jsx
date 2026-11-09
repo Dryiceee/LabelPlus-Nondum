@@ -1,0 +1,140 @@
+import React from 'react';
+import {useContext} from '../../context';
+import {locale} from '../../utils';
+
+const modalLoaders = {
+    settings: () => import(/* webpackChunkName: "modal-settings" */ './settings'),
+    editStyle: () => import(/* webpackChunkName: "modal-edit-style" */ './editStyle'),
+    editFolder: () => import(/* webpackChunkName: "modal-edit-folder" */ './editFolder'),
+    export: () => import(/* webpackChunkName: "modal-export" */ './export'),
+    fontScanR: () => import(/* webpackChunkName: "modal-font-scan" */ './fontScanR'),
+    labelPlus: () => import(/* webpackChunkName: "modal-label-plus" */ './labelPlus'),
+    update: () => import(/* webpackChunkName: "modal-update" */ './update'),
+};
+const SettingsModal = React.lazy(modalLoaders.settings);
+const EditStyleModal = React.lazy(modalLoaders.editStyle);
+const EditFolderModal = React.lazy(modalLoaders.editFolder);
+const ExportModal = React.lazy(modalLoaders.export);
+const FontScanRModal = React.lazy(modalLoaders.fontScanR);
+const LabelPlusModal = React.lazy(modalLoaders.labelPlus);
+const UpdateModal = React.lazy(modalLoaders.update);
+let modalStylesPromise = null;
+const loadModalStyles = () => {
+    if (!modalStylesPromise) {
+        modalStylesPromise = import(/* webpackChunkName: "modal-shell" */ './modal.scss');
+    }
+    return modalStylesPromise;
+};
+
+class ModalErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {hasError: false};
+    }
+
+    static getDerivedStateFromError() {
+        return {hasError: true};
+    }
+
+    componentDidUpdate(prevProps) {
+        if (prevProps.modalType !== this.props.modalType && this.state.hasError) {
+            this.setState({hasError: false});
+        }
+    }
+
+    render() {
+        if (!this.state.hasError) return this.props.children;
+        return (
+            <React.Fragment>
+                <div className="app-modal-header hostBrdBotContrast">
+                    <div className="app-modal-title">{locale.errorTitle}</div>
+                </div>
+                <div className="app-modal-body">
+                    <div className="app-modal-body-inner article-format">
+                        <p>{locale.modalLoadError || 'Unable to load this window. Please close and reopen TypeR.'}</p>
+                    </div>
+                </div>
+                <div className="app-modal-footer hostBrdTopContrast">
+                    <button className="topcoat-button--large" onClick={this.props.onClose}>{locale.close}</button>
+                </div>
+            </React.Fragment>
+        );
+    }
+}
+
+const Modal = React.memo(function Modal() {
+    const context = useContext((state) => ({
+        modalType: state.modalType,
+    }));
+    const close = React.useCallback(() => {
+        context.dispatch({type: 'setModal'});
+    }, [context.dispatch]);
+    const [stylesReady, setStylesReady] = React.useState(false);
+
+    let modalContent = null;
+    let modalType = context.state.modalType;
+    if (modalType === 'settings') modalContent = <SettingsModal />;
+    else if (modalType === 'editStyle') modalContent = <EditStyleModal />;
+    else if (modalType === 'editFolder') modalContent = <EditFolderModal />;
+    else if (modalType === 'export') modalContent = <ExportModal />;
+    else if (modalType === 'fontScanR') modalContent = <FontScanRModal />;
+    else if (modalType === 'update') modalContent = <UpdateModal />;
+
+    // The style editors open from the LabelPlus window, which stays mounted and
+    // hidden behind them so that nothing chosen there is lost, and returns when
+    // they close.
+    const labelPlusOpen = React.useRef(false);
+    const previousType = React.useRef(null);
+    const isStyleEditor = (type) => type === 'editStyle' || type === 'editFolder';
+    const keepLabelPlus = modalType === 'labelPlus' || (labelPlusOpen.current &&
+        (isStyleEditor(modalType) || (!modalType && isStyleEditor(previousType.current))));
+    React.useEffect(() => {
+        const returning = !modalType && labelPlusOpen.current && isStyleEditor(previousType.current);
+        labelPlusOpen.current = modalType === 'labelPlus' || returning || (labelPlusOpen.current && isStyleEditor(modalType));
+        previousType.current = modalType;
+        if (returning) context.dispatch({type: 'setModal', modal: 'labelPlus'});
+    }, [modalType]);
+    if (keepLabelPlus) {
+        const front = modalType === 'labelPlus';
+        modalContent = (
+            <React.Fragment>
+                <div style={{display: front ? 'contents' : 'none'}}><LabelPlusModal front={front} /></div>
+                {front ? null : modalContent}
+            </React.Fragment>
+        );
+    }
+
+    React.useEffect(() => {
+        if (!modalType || stylesReady) return undefined;
+        let active = true;
+        const modalLoader = modalLoaders[modalType] || (() => Promise.resolve());
+        Promise.all([loadModalStyles(), modalLoader()]).then(
+            () => {
+                if (active) setStylesReady(true);
+            },
+            () => {
+                // Let the error boundary render a useful recovery message even
+                // if a local chunk could not be read.
+                if (active) setStylesReady(true);
+            }
+        );
+        return () => {
+            active = false;
+        };
+    }, [modalType, stylesReady]);
+
+    return modalContent && stylesReady ? (
+        <div className="app-modal">
+            <div className="app-modal-hatch hostBgd"></div>
+            <div className="app-modal-inner hostBgdLight">
+                <ModalErrorBoundary modalType={modalType} onClose={close}>
+                    <React.Suspense fallback={<div className="app-modal-body"><div className="app-modal-body-inner">{locale.loading || 'Loading...'}</div></div>}>
+                        {modalContent}
+                    </React.Suspense>
+                </ModalErrorBoundary>
+            </div>
+        </div>
+    ) : null;
+});
+
+export default Modal;

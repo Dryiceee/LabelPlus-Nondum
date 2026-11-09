@@ -1,0 +1,36 @@
+# Local editor and agent configuration
+.vscode/
+AGENTS.md
+CLAUDE.md
+.claude/worktrees/
+
+# Dependencies and generated extension files
+node_modules
+app/
+storage/
+# UXP plugin build output (npm run build:uxp)
+uxp/
+uxp-addon/
+uxp-mac/
+.native-build/
+
+# Release artifacts
+Releases/
+TypeR*.zip
+TypeR-*.zxp
+.update-test/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local reference clones and notes
+refs/
+note.docx

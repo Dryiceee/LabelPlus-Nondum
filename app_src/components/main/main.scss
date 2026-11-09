@@ -1,0 +1,61 @@
+.app-body {
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+
+    &.is-resizing {
+        cursor: ns-resize;
+        user-select: none;
+    }
+}
+
+.top-block {
+    flex: 0 0 auto;
+    min-height: 0;
+}
+
+@media (max-height: 450px) {
+  .top-block {
+    flex: 0 0 auto;
+    height: auto !important;
+    min-height: auto;
+  }
+}
+.top-divider {
+    cursor: ns-resize;
+    flex: 0 0 auto;
+    padding: 5px 0;
+    & > DIV {
+        background: rgba(255, 255, 255, 0.12);
+        height: 1px;
+    }
+    .light-theme & > DIV {
+        background: rgba(0, 0, 0, 0.14);
+    }
+}
+.middle-block {
+    flex-grow: 2;
+}
+.middle-divider {
+    cursor: ns-resize;
+    padding: 5px 0;
+    flex: 0 0 auto;
+    & > DIV {
+        background: rgba(255, 255, 255, 0.12);
+        height: 1px;
+    }
+    .light-theme & > DIV {
+        background: rgba(0, 0, 0, 0.14);
+    }
+}
+.bottom-block {
+    flex: 0 0 auto;
+    &.m-grow {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+}
+.footer-block {
+    flex: 0 0 auto;
+}

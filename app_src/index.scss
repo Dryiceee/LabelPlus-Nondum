@@ -1,0 +1,474 @@
+@use './modernSkin';
+
+.topcoat-button--large,
+.topcoat-icon-button--large,
+.topcoat-button--large--cta,
+.topcoat-icon-button--large--cta,
+.topcoat-button--large--quiet,
+.topcoat-icon-button--large--quiet {
+  justify-content: center;
+  align-items: center;
+  display: flex;
+}
+.topcoat-button--large--cta,
+.topcoat-icon-button--large--cta {
+  &.m-danger {
+    border-color: #690000;
+    background: #af2121;
+  }
+  &.m-danger:hover {
+    background: #d82424;
+  }
+  &.m-danger:active {
+    background: #9a0000;
+  }
+}
+.topcoat-button--large--quiet,
+.topcoat-icon-button--large--quiet {
+  &.m-cta {
+    color: #fff;
+  }
+  &.m-cta:hover {
+    box-shadow: inset 0 1px rgba(#fff, 0.36);
+    border-color: #134f7f;
+    background: #4ca1e4;
+  }
+  &.m-cta:active {
+    box-shadow: inset 0 1px rgba(#000, 0.12);
+    border-color: #134f7f;
+    background: #1e7dc8;
+  }
+}
+.topcoat-button--large,
+.topcoat-button--large--cta,
+.topcoat-button--large--quiet {
+  & > svg {
+    margin-right: 4px;
+  }
+}
+.topcoat-textarea {
+  font-size: 0.875rem;
+  line-height: 1.1rem;
+  padding: 4px 10px;
+}
+
+.sketch-picker {
+  INPUT + SPAN {
+    width: 80%;
+  }
+}
+
+.link {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.global-tooltip {
+  background: rgba(#111, 0.96);
+  border: 1px solid rgba(#fff, 0.16);
+  border-radius: 4px;
+  box-shadow: 0 5px 16px rgba(#000, 0.32);
+  box-sizing: border-box;
+  color: #fff;
+  font-size: 11px;
+  left: 0;
+  line-height: 1.25;
+  max-width: 280px;
+  opacity: 0;
+  padding: 5px 7px;
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  transform: translateY(2px);
+  transition: opacity 0.08s linear, transform 0.08s linear;
+  white-space: normal;
+  z-index: 100000;
+
+  &.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fields {
+  & + & {
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+}
+.field {
+  &.hostBrdTopContrast {
+    border-top-style: dashed;
+    padding-top: 6px;
+    margin-top: 6px;
+  }
+  & + & {
+    margin-top: 10px;
+  }
+  & > BUTTON {
+    width: 100%;
+  }
+}
+.field-label {
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+.field-mini-label {
+  margin-bottom: 5px;
+  font-size: 10px;
+}
+.field-input {
+  INPUT {
+    box-sizing: border-box;
+    width: 100%;
+  }
+  TEXTAREA {
+    box-sizing: border-box;
+    min-height: 29px;
+    resize: vertical;
+    width: 100%;
+  }
+  SELECT {
+    width: 100%;
+  }
+}
+.field-descr {
+  font-style: italic;
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.article-format {
+  & > *:first-child {
+    margin-top: 0;
+  }
+  H1,
+  H2,
+  H3,
+  H4,
+  H5 {
+    margin-bottom: 0.6em;
+    margin-top: 1.2em;
+  }
+  P {
+    margin-bottom: 0;
+    margin-top: 1em;
+  }
+  UL,
+  OL {
+    padding-left: 30px;
+    margin-bottom: 0;
+    margin-top: 0.6em;
+    & + P {
+      margin-top: 0.6em;
+    }
+  }
+  LI + LI {
+    margin-top: 0.3em;
+  }
+}
+
+.shortcut-field {
+  display: flex;
+  align-items: center;
+  BUTTON {
+    margin-left: 4px;
+    flex-shrink: 0;
+  }
+}
+
+body[data-editor-theme]:not([data-editor-theme="system"]) {
+  background: var(--editor-surface) !important;
+  color: var(--editor-text) !important;
+
+  .hostElt,
+  .hostBgd,
+  .app-body {
+    background-color: var(--editor-surface) !important;
+    color: var(--editor-text) !important;
+  }
+
+  .hostBgdDark {
+    background-color: var(--editor-surfaceAlt) !important;
+  }
+
+  .hostBgdLight {
+    background-color: var(--editor-panel) !important;
+  }
+
+  .top-divider,
+  .middle-divider {
+    background-color: transparent !important;
+
+    > div {
+      background-color: var(--editor-border) !important;
+    }
+  }
+
+  .hostBrdTopContrast {
+    border-top-color: var(--editor-border) !important;
+  }
+
+  .app-modal-hatch {
+    background: rgba(0, 0, 0, 0.42) !important;
+  }
+
+  .app-modal-inner,
+  .settings-confirm-dialog {
+    background: var(--editor-surfaceAlt) !important;
+    color: var(--editor-text) !important;
+    border: 1px solid var(--editor-border);
+  }
+
+  .app-modal-header,
+  .app-modal-footer {
+    background: var(--editor-panel) !important;
+  }
+
+  .topcoat-button,
+  .topcoat-button--large,
+  .topcoat-button--quiet,
+  .topcoat-button--large--quiet,
+  .topcoat-icon-button,
+  .topcoat-icon-button--large,
+  .topcoat-icon-button--quiet,
+  .topcoat-icon-button--large--quiet {
+    background: var(--editor-inputAlt) !important;
+    border-color: var(--editor-border) !important;
+    box-shadow: none !important;
+    color: var(--editor-text) !important;
+    text-shadow: none !important;
+
+    &:hover:not(:disabled) {
+      background: var(--editor-panel) !important;
+      border-color: var(--editor-borderStrong) !important;
+    }
+  }
+
+  .topcoat-button--cta,
+  .topcoat-button--large--cta,
+  .style-item.m-current {
+    background: var(--editor-accent) !important;
+    border-color: var(--editor-accent) !important;
+    color: var(--editor-accentText) !important;
+    text-shadow: none !important;
+
+    &:hover:not(:disabled) {
+      background: var(--editor-accentHover) !important;
+      border-color: var(--editor-accentHover) !important;
+    }
+  }
+
+  .topcoat-textarea,
+  .topcoat-text-input,
+  .topcoat-text-input--large,
+  .preview-top_size-input {
+    background: var(--editor-input) !important;
+    border-color: var(--editor-border) !important;
+    box-shadow: none !important;
+    color: var(--editor-text) !important;
+    text-shadow: none !important;
+
+    &:focus {
+      border-color: var(--editor-accent) !important;
+    }
+  }
+
+  .text-block,
+  .text-message {
+    background: var(--editor-codeBg) !important;
+  }
+
+  .text-lines:before,
+  .text-lines:after {
+    background: var(--editor-codeGutter) !important;
+  }
+
+  .text-line {
+    color: var(--editor-codeMuted) !important;
+
+    &.m-current {
+      background: var(--editor-codeCurrent) !important;
+      color: var(--editor-codeCurrentText) !important;
+
+      // Render the active-line marker as a filled gutter bar
+      &::before {
+        background-color: var(--editor-accent) !important;
+      }
+    }
+  }
+
+  // Written flat: nesting "& + &:before" under a parent selector compiles
+  // to an invalid combinator chain that never matches.
+  .text-line + .text-line:before {
+    border-top-color: var(--editor-border) !important;
+  }
+
+  .text-line-text {
+    background: var(--editor-codeBg) !important;
+  }
+
+  // Written flat as well: "&" here stands for the whole "body[…] .text-line-text"
+  // chain, so nesting the line modifiers under it compiled to a selector
+  // starting with .text-line — which never matched.
+  .text-line.m-current .text-line-text {
+    background: var(--editor-codeCurrent) !important;
+  }
+
+  .text-line.m-page .text-line-text {
+    background: var(--editor-codePage) !important;
+  }
+
+  .text-area,
+  .text-area-overlay {
+    color: var(--editor-codeText) !important;
+    caret-color: var(--editor-codeText) !important;
+  }
+
+  .text-message > div,
+  .field-descr,
+  .settings-checkbox-hint {
+    color: var(--editor-muted) !important;
+  }
+
+  .folder-item,
+  .settings-layout-canvas,
+  .settings-layout-inspector,
+  .export-section,
+  .export-folder-item,
+  .export-font-item,
+  .export-settings-item,
+  .settings-checkbox-item {
+    background: var(--editor-panel) !important;
+    border-color: var(--editor-border) !important;
+  }
+
+  .folder-header:hover,
+  .style-item:hover {
+    outline-color: var(--editor-borderStrong) !important;
+  }
+
+  .settings-checkbox-custom {
+    border-color: var(--editor-borderStrong) !important;
+
+    &::after {
+      border-color: var(--editor-accent) !important;
+    }
+  }
+
+  .settings-checkbox-label input:checked + .settings-checkbox-custom {
+    border-color: var(--editor-accent) !important;
+    background: var(--editor-accentSoft) !important;
+  }
+
+  // Tabs follow the same elevation scale as the rest of the modal:
+  // rail on panel, active tab highlighted with the accent.
+  .settings-tabs {
+    background: var(--editor-panel) !important;
+    border-radius: 4px;
+  }
+
+  .settings-tab {
+    color: var(--editor-muted) !important;
+    opacity: 1 !important;
+
+    &:hover {
+      color: var(--editor-text) !important;
+      outline-color: var(--editor-borderStrong) !important;
+    }
+  }
+
+  .settings-tab--active {
+    background: var(--editor-accentSoft) !important;
+    color: var(--editor-text) !important;
+    box-shadow: inset 0 -2px 0 var(--editor-accent) !important;
+  }
+
+  .settings-tab--disabled,
+  .settings-tab--disabled:hover {
+    color: var(--editor-muted) !important;
+    opacity: 0.4 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+  }
+
+  .settings-group-title {
+    color: var(--editor-text) !important;
+  }
+
+  .settings-checkbox-label span,
+  .settings-checkbox-content span {
+    color: var(--editor-text) !important;
+  }
+
+  .settings-new-badge {
+    background: var(--editor-accentSoft) !important;
+    border-color: var(--editor-accent) !important;
+    color: var(--editor-accent) !important;
+  }
+
+  .settings-help-badge {
+    background: var(--editor-accentSoft) !important;
+    border-color: var(--editor-accent) !important;
+    color: var(--editor-accent) !important;
+  }
+
+  .export-summary {
+    background: var(--editor-panel) !important;
+  }
+
+  .global-tooltip {
+    background: var(--editor-panel) !important;
+    border-color: var(--editor-borderStrong) !important;
+    color: var(--editor-text) !important;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--editor-borderStrong);
+    border: 2px solid transparent;
+    border-radius: 6px;
+    background-clip: padding-box;
+
+    &:hover {
+      background-color: var(--editor-muted);
+      background-clip: padding-box;
+    }
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+// Custom background image. The picture is a fixed layer sitting behind the
+// whole interface rather than a body background: the image theme makes its
+// surfaces translucent, and a body background would paint over the layer.
+HTML.m-typer-bg {
+  background: var(--typer-bg-base, #1e1e1e);
+}
+
+.app-bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.app-bg-layer-image {
+  position: absolute;
+  background-repeat: no-repeat;
+}
+
+.app-bg-layer-tint {
+  position: absolute;
+  inset: 0;
+}

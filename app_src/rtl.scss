@@ -1,0 +1,60 @@
+/* RTL Overrides for Arabic and other Right-To-Left languages */
+[dir="rtl"] {
+  font-family: "Segoe UI", "Cairo", "Tajawal", "Almarai", Arial, sans-serif !important;
+
+  * {
+    font-family: inherit;
+  }
+
+  /* textBlock.scss */
+  .text-lines:before {
+    left: auto;
+    right: 0;
+    /* Gutter hairline follows the gutter to the other side */
+    box-shadow: inset 1px 0 0 rgba(127, 127, 127, 0.35);
+  }
+
+  .text-lines:after {
+    right: auto;
+    left: 0;
+    box-shadow: inset -1px 0 0 rgba(127, 127, 127, 0.35);
+  }
+
+  .text-line.m-current:before {
+    left: auto;
+    right: 0;
+  }
+
+  .text-area {
+    margin-left: 20px;
+    margin-right: 50px;
+  }
+
+  .text-area-overlay {
+    left: 20px;
+    right: 50px;
+  }
+
+  .text-message {
+    left: 20px;
+    right: 50px;
+  }
+
+  /* previewBlock.scss */
+  .preview-top_selection {
+    margin-right: 0;
+    margin-left: 10px;
+  }
+
+  /* modal.scss */
+  .app-modal {
+    left: auto;
+    right: 0;
+  }
+
+  .app-modal-body-inner {
+    padding-left: 0;
+    padding-right: 16px;
+  }
+
+}

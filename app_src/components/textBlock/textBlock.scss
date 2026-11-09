@@ -1,0 +1,357 @@
+// Script sheet: a "paper" column framed by two quiet gutters. The visible
+// glyphs are always drawn by .text-area / .text-area-overlay on top, so this
+// layer must stay a pure highlight layer (backgrounds only, metrics identical
+// to the textarea) or the highlights drift away from the text.
+
+// Shared metrics — must stay in sync across .text-line, .text-area and
+// .text-area-overlay, otherwise the highlight layer no longer wraps like the
+// textarea and every chip lands next to its word instead of on it.
+$code-font: Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+$code-size: 14px;
+$code-leading: 17px;
+$code-pad-x: 6px;
+
+$sheet-bg: #eee;
+$sheet-paper: #fff;
+$sheet-gutter: #e8e8e8;
+// Neutral gray: readable over a light gutter and over the dark gutters that
+// custom editor themes paint underneath.
+$sheet-edge: rgba(127, 127, 127, 0.35);
+$sheet-rule: rgba(0, 0, 0, 0.07);
+$sheet-accent: #3d88cf;
+
+.text-block {
+  background: $sheet-bg;
+  position: relative;
+  overflow-y: auto;
+  display: flex;
+}
+
+// The sheet stays light even when Photoshop's UI is dark, so it cannot use the
+// global scrollbar skin: that one paints a translucent white thumb, which is
+// invisible over a light gutter. Custom editor themes keep their own skin
+// (higher specificity in index.scss) since their sheet follows the theme.
+body.dark-theme .text-block,
+body.light-theme .text-block {
+  &::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  &::-webkit-scrollbar-track,
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.28);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.42);
+      background-clip: padding-box;
+    }
+  }
+}
+.text-lines {
+  box-sizing: border-box;
+  position: absolute;
+  padding: 4px 0;
+  min-height: 100%;
+  width: 100%;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  &:before {
+    background: $sheet-gutter;
+    box-shadow: inset -1px 0 0 $sheet-edge;
+    position: absolute;
+    display: block;
+    height: 100%;
+    width: 50px;
+    content: "";
+    left: 0;
+    top: 0;
+  }
+  &:after {
+    background: $sheet-gutter;
+    box-shadow: inset 1px 0 0 $sheet-edge;
+    position: absolute;
+    display: block;
+    height: 100%;
+    width: 20px;
+    content: "";
+    right: 0;
+    top: 0;
+  }
+}
+.text-line {
+  justify-content: space-between;
+  position: relative;
+  display: flex;
+  font-family: $code-font;
+  line-height: $code-leading;
+  font-size: $code-size;
+  color: #777;
+  z-index: 1;
+  & + &:before {
+    border-top: 1px solid $sheet-rule;
+    position: absolute;
+    display: block;
+    content: "";
+    z-index: 2;
+    width: 100%;
+    height: 0;
+    left: 0;
+    top: 0;
+  }
+  &.m-current {
+    background: #cfe1f2;
+    color: #16334f;
+    z-index: 2;
+    // Active-line marker in the gutter instead of two hard rules across the
+    // whole row: reads as clearly, adds far less noise to a dense script.
+    &:before {
+      background: $sheet-accent;
+      position: absolute;
+      display: block;
+      border-top: none;
+      content: "";
+      z-index: 3;
+      width: 3px;
+      height: 100%;
+      left: 0;
+      top: 0;
+    }
+  }
+}
+.text-lines-spacer {
+  position: relative;
+  pointer-events: none;
+  width: 100%;
+}
+.text-line-num {
+  text-align: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #9d9d9d;
+  width: 32px;
+  .text-line.m-current & {
+    font-weight: 600;
+    color: inherit;
+  }
+  .text-line.m-page & {
+    color: #55803f;
+  }
+}
+.text-line-select {
+  flex: 0 0 auto;
+  width: 18px;
+  & > svg {
+    margin-bottom: -5px;
+    position: relative;
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.12s ease, color 0.12s ease;
+    top: -2px;
+    &:hover {
+      color: #000;
+      opacity: 1;
+    }
+  }
+  .text-line:hover & > svg,
+  .text-line.m-current & > svg {
+    opacity: 1;
+  }
+  .text-line.m-current & > svg {
+    cursor: auto;
+  }
+}
+.text-line-text {
+  word-break: break-word;
+  white-space: pre-wrap;
+  // Symmetric and equal to the textarea padding so every chip below sits
+  // exactly under its own characters.
+  padding: 0 $code-pad-x;
+  color: rgba(#fff, 0);
+  background: $sheet-paper;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+  flex-grow: 2;
+  .text-line.m-current & {
+    background: #dcebf8;
+  }
+  .text-line.m-empty & {
+    background: rgba(#fff, 0);
+  }
+  .text-line.m-page & {
+    background: #dcf1d1;
+  }
+  // Theme-agnostic hover wash: an inset shadow survives the background
+  // overrides custom editor themes apply to this element.
+  .text-line:not(.m-current):hover & {
+    box-shadow: inset 0 0 0 999px rgba(127, 127, 127, 0.1);
+  }
+  .text-line-ignore-prefix {
+    background: rgba(127, 127, 127, 0.28);
+    border-radius: 2px;
+  }
+  .text-line-style-prefix {
+    border-radius: 2px;
+    opacity: 0.85;
+  }
+  // Tinted band rather than colored text: the real glyphs are painted on top
+  // by the overlay, so a text color would only ever show as a fringe.
+  .text-line-ignore-tag {
+    background: rgba(#c0392b, 0.22);
+    border-radius: 2px;
+  }
+}
+.text-line-insert {
+  text-align: center;
+  flex: 0 0 auto;
+  width: 20px;
+  & > svg {
+    margin-bottom: -5px;
+    position: relative;
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.12s ease, color 0.12s ease;
+    top: -2px;
+    &:hover {
+      color: #000;
+      opacity: 1;
+    }
+    .text-line.m-current &:hover {
+      color: #073357;
+    }
+  }
+  .text-line:hover & > svg,
+  .text-line.m-current & > svg {
+    opacity: 1;
+  }
+}
+.text-area {
+  box-sizing: border-box;
+  font-family: $code-font;
+  word-break: break-word;
+  white-space: pre-wrap;
+  position: relative;
+  overflow: hidden;
+  background: none;
+  padding: 4px $code-pad-x;
+  margin-right: 20px;
+  margin-left: 50px;
+  line-height: $code-leading;
+  font-size: $code-size;
+  color: #000;
+  -webkit-text-fill-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  caret-color: $sheet-accent;
+  border: none;
+  resize: none;
+  width: 100%;
+  // Never let a stale/zero JS-set height make the textarea unclickable:
+  // keep it at least as tall as the visible block, like .text-lines
+  min-height: 100%;
+  z-index: 4;
+  &.m-focused {
+    -webkit-text-fill-color: currentColor;
+  }
+  &::selection {
+    background: rgba(#288edf, 0.28);
+  }
+}
+.text-area-overlay {
+  box-sizing: border-box;
+  font-family: $code-font;
+  word-break: break-word;
+  white-space: pre-wrap;
+  position: absolute;
+  overflow: hidden;
+  background: none;
+  padding: 4px $code-pad-x;
+  line-height: $code-leading;
+  font-size: $code-size;
+  color: #000;
+  -webkit-font-smoothing: antialiased;
+  border: none;
+  left: 50px;
+  right: 20px;
+  z-index: 3;
+  top: 0;
+  pointer-events: none;
+  &.m-hidden {
+    visibility: hidden;
+  }
+}
+// Hidden copy of the script, one block per line, that the rows take their
+// height from. Same class as the overlay so it always wraps like the text.
+.text-row-mirror {
+  visibility: hidden;
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  // An empty line takes one line box, like in the text: a fixed height would
+  // not follow the rounding of the line height under a display scale
+  & > div:empty::before {
+    content: "\200b";
+  }
+}
+.text-format-toolbar {
+  position: fixed;
+  display: flex;
+  gap: 2px;
+  z-index: 20;
+  padding: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  background: rgba(250, 250, 250, 0.96);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  transform: translate(-50%, -100%);
+  &.m-below {
+    transform: translate(-50%, 0);
+  }
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    color: #333;
+    background: transparent;
+    cursor: pointer;
+    &:hover,
+    &:focus {
+      color: #0b5794;
+      background: rgba(61, 136, 207, 0.18);
+      outline: none;
+    }
+  }
+}
+.text-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  background: #fafafa;
+  pointer-events: none;
+  z-index: 4;
+  cursor: text;
+  height: 100%;
+  right: 20px;
+  left: 50px;
+  top: 0;
+  & > DIV {
+    font-size: 13px;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    text-align: center;
+    padding: 0 18px;
+    color: #9d9d9d;
+  }
+}
