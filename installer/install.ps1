@@ -1,5 +1,5 @@
 ﻿# install.ps1 [-Uxp | -Legacy] [-Silent] [LabelPlus-Nondum-win.ccx]
-# LabelPlus-Nondum's installer, from TypeR's. install_win.cmd and get.ps1 pass
+# LabelPlus-Nondum's installer (Windows only), from TypeR's. install_win.cmd and get.ps1 pass
 # -Uxp: the plugin is copied into Photoshop's UXP plugins and registered, so
 # Creative Cloud is not needed. TypeR's Legacy (CEP) path is kept for its tests.
 param([switch]$Silent, [switch]$Uxp, [switch]$Legacy, [Parameter(Position = 0)][string]$Package, [string[]]$PhotoshopPath)

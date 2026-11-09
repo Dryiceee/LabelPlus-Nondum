@@ -21,20 +21,14 @@ LabelPlus-Nondum 是一个 Photoshop 插件（UXP），用来把 LabelPlus 翻�
 
 ## 安装
 
-需要 Windows 或 macOS 上的标准桌面版 Photoshop 2025（26.0）或更新版本；便携版、精简版可能删掉了插件支持，面板会打不开。可以和 TypeR 同时安装，但不要同时打开两个面板，否则每个快捷键都会执行两次。
+只支持 Windows：需要标准桌面版 Photoshop 2025（26.0）或更新版本；便携版、精简版可能删掉了插件支持，面板会打不开。可以和 TypeR 同时安装，但不要同时打开两个面板，否则每个快捷键都会执行两次。
 
 ### 一行命令安装
 
-先关闭 Photoshop。Windows 在 PowerShell 里粘贴并回车：
+先关闭 Photoshop，在 PowerShell 里粘贴并回车：
 
 ```powershell
 irm https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.ps1 | iex
-```
-
-macOS 在“终端”里粘贴并回车：
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.sh | bash
 ```
 
 脚本会下载最新版，校验后直接装进 Photoshop 的插件文件夹，不需要 Creative Cloud。装好后在“增效工具 > LabelPlus-Nondum”打开面板。
@@ -43,16 +37,15 @@ curl -fsSL https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.
 <summary><strong>离线安装包</strong></summary>
 
 1. 下载 [`LabelPlus-Nondum.zip`](https://github.com/Dryiceee/LabelPlus-Nondum/releases/latest/download/LabelPlus-Nondum.zip) 并完整解压。
-2. 关闭 Photoshop，Windows 双击 `install_win.cmd`，macOS 双击 `install_mac.command`。
-   - macOS 第一次会拦下这个脚本（它没有 Apple 签名）：点“完成”，到“系统设置 > 隐私与安全性”底部点“仍要打开”，再确认一次。也可以在终端里进入解压的文件夹，运行 `bash install_mac.command`。
+2. 关闭 Photoshop，双击 `install_win.cmd`。
 
 解压后的文件夹建议留着，以后可以用它更新。
 
-脚本可以加参数（Windows 在命令提示符里给 `install_win.cmd` 加，macOS 给 `install_mac.command` 加）：
+在命令提示符里可以给 `install_win.cmd` 加参数：
 
-- `-Silent`（macOS 为 `--silent`）：不等待按键，适合批量部署。
+- `-Silent`：不等待按键，适合批量部署。
 - 一个 `.ccx` 文件的路径：安装这个包，而不是离线包里自带的。
-- `-PhotoshopPath "E:\My Photoshop"`（仅 Windows）：Photoshop 装在脚本找不到的位置时，告诉脚本它在哪里。脚本会顺便更新放在这个 Photoshop 的 `Plug-ins` 文件夹里的副本。
+- `-PhotoshopPath "E:\My Photoshop"`：Photoshop 装在脚本找不到的位置时，告诉脚本它在哪里。脚本会顺便更新放在这个 Photoshop 的 `Plug-ins` 文件夹里的副本。
 
 脚本只为当前用户安装，不需要管理员权限。它会先验证安装包里的每个文件，再替换旧版本；中途失败会自动恢复，其他插件的登记也不会动。
 
@@ -61,10 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.
 <details>
 <summary><strong>用 Creative Cloud 安装</strong></summary>
 
-下载对应系统的安装包，双击后由 Creative Cloud 完成安装：
-
-- Windows：[`LabelPlus-Nondum-win.ccx`](https://github.com/Dryiceee/LabelPlus-Nondum/releases/latest/download/LabelPlus-Nondum-win.ccx)
-- macOS：[`LabelPlus-Nondum-mac.ccx`](https://github.com/Dryiceee/LabelPlus-Nondum/releases/latest/download/LabelPlus-Nondum-mac.ccx)
+下载 [`LabelPlus-Nondum-win.ccx`](https://github.com/Dryiceee/LabelPlus-Nondum/releases/latest/download/LabelPlus-Nondum-win.ccx)，双击后由 Creative Cloud 完成安装。
 
 </details>
 
@@ -73,27 +63,20 @@ curl -fsSL https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.
 
 适合脚本运行不了的电脑，例如公司电脑禁止运行脚本。
 
-1. 下载对应系统的 `.ccx` 安装包（见上一项），把后缀改成 `.zip` 后解压。
+1. 下载 `.ccx` 安装包（见上一项），把后缀改成 `.zip` 后解压。
 2. 把解压出来的文件夹改名为 `LabelPlus-Nondum`，放进 Photoshop 安装目录的 `Plug-ins` 文件夹。`manifest.json` 要直接位于 `LabelPlus-Nondum` 文件夹里，不能再套一层文件夹。
-   - Windows 一般是 `C:\Program Files\Adobe\Adobe Photoshop 2025\Plug-ins\`，写入这里需要管理员权限。
-   - macOS 一般是 `/Applications/Adobe Photoshop 2025/Plug-ins/`。
+   一般是 `C:\Program Files\Adobe\Adobe Photoshop 2025\Plug-ins\`，写入这里需要管理员权限。
 3. 重启 Photoshop。
 
-这种方式只对放进去的那个 Photoshop 生效。更新时要换成新版本的文件夹，Windows 上也可以运行安装脚本，它会一并更新这份副本。
+这种方式只对放进去的那个 Photoshop 生效。更新时要换成新版本的文件夹，也可以运行安装脚本，它会一并更新这份副本。
 
 </details>
 
-### macOS：允许快捷键
-
-在画布上按快捷键时，插件要靠一个小程序读取键盘。macOS 要求给 Photoshop 开“输入监控”权限，否则含字母、数字或符号的快捷键不会生效：
-
-“系统设置 > 隐私与安全性 > 输入监控”里点“+”，添加 Adobe Photoshop 并打开开关。插件发现缺少这个权限时，会在“设置 > 快捷键”里提供打开这个页面的按钮。
-
 ### 更新
 
-1.0.0 不会自动检查更新。有新版本时，关闭 Photoshop 后再运行一次上面的一行命令即可；用离线包的话，Windows 双击 `installer\update_win.cmd`，macOS 在终端里运行 `bash installer/update_mac.sh`；也可以下载新的 `.ccx` 双击安装。
+1.0.0 不会自动检查更新。有新版本时，关闭 Photoshop 后再运行一次上面的一行命令即可；用离线包的话，双击 `installer\update_win.cmd`；也可以下载新的 `.ccx` 双击安装。
 
-样式和设置都会保留，它们存放在插件以外的位置：Windows 是 `%APPDATA%\LabelPlus-Nondum\UXP`，macOS 是 `~/Library/Application Support/LabelPlus-Nondum/UXP`。想另外备份，可以在“设置 > 数据”里导出。
+样式和设置都会保留，它们存放在插件以外的位置：`%APPDATA%\LabelPlus-Nondum\UXP`。想另外备份，可以在“设置 > 数据”里导出。
 
 ## 使用
 
@@ -122,14 +105,7 @@ curl -fsSL https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.
 
 插件的界面显示在 Photoshop 的网页组件（UXP WebView）里。网页组件 15 秒内没有响应时，面板会显示一段诊断信息，请把它连同 Photoshop 版本一起发到 issues。
 
-Windows 上，可能是 Adobe 自带的 WebView2 组件缺失或损坏，常见于不完整的 Photoshop 安装。它位于 `C:\Program Files\Common Files\Adobe\Microsoft\EdgeWebView\`。这时要修复 Photoshop 的安装，只重装插件解决不了。参见 [Adobe 的 UXP WebView 说明](https://helpx.adobe.com/creative-cloud/apps/integration-with-other-apps/manage-plugins/uxp-webview.html)。
-
-</details>
-
-<details>
-<summary><strong>macOS 上含字母或数字的快捷键没反应</strong></summary>
-
-给 Photoshop 开“输入监控”权限，见上方“macOS：允许快捷键”。
+可能是 Adobe 自带的 WebView2 组件缺失或损坏，常见于不完整的 Photoshop 安装。它位于 `C:\Program Files\Common Files\Adobe\Microsoft\EdgeWebView\`。这时要修复 Photoshop 的安装，只重装插件解决不了。参见 [Adobe 的 UXP WebView 说明](https://helpx.adobe.com/creative-cloud/apps/integration-with-other-apps/manage-plugins/uxp-webview.html)。
 
 </details>
 

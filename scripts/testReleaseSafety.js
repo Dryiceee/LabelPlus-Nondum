@@ -42,22 +42,23 @@ try {
   installPackageFiles(files, target, { fs, path, Buffer });
   assert.strictEqual(fs.readFileSync(path.join(target, 'app/old-hashed-chunk.js'), 'utf8'), 'old lazy chunk');
   assert(!fs.existsSync(path.join(target, '.typer-update-journal.json')));
-  Object.keys(files).forEach(name => {
-    fs.mkdirSync(path.dirname(path.join(source, name)), { recursive: true });
-    fs.writeFileSync(path.join(source, name), files[name]);
-  });
-  const installer = process.platform === 'win32' ? ['powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.resolve(__dirname, 'helpers/runWindowsInstallerFixture.ps1')]] : ['bash', [path.resolve(__dirname, '../installer/install_mac.sh'), '--silent']];
-  const runInstaller = () => spawnSync(installer[0], installer[1], { encoding: 'utf8', env: { ...process.env, TYPER_INSTALL_SOURCE: source, TYPER_INSTALL_TARGET: target, TYPER_INSTALL_SKIP_DEBUG: '1' } });
-  // Finder writes this file in a folder as soon as it is opened
-  if (process.platform !== 'win32') fs.writeFileSync(path.join(source, 'locale/.DS_Store'), 'Finder');
-  const good = runInstaller(); assert.strictEqual(good.status, 0, good.stderr + good.stdout);
-  assert.strictEqual(fs.readFileSync(path.join(target, 'storage'), 'utf8'), 'user settings');
-  assert(!fs.existsSync(path.join(target, 'app/old-hashed-chunk.js')), 'offline installer replaces all owned folders');
-  fs.writeFileSync(path.join(source, 'app/index.js'), 'broken');
-  const bad = runInstaller(); assert.notStrictEqual(bad.status, 0);
-  assert.strictEqual(fs.readFileSync(path.join(target, 'app/index.js'), 'utf8'), 'new app/index.js');
-  fs.unlinkSync(path.join(source, 'app/package.sha256'));
-  assert.notStrictEqual(runInstaller().status, 0);
-  assert.strictEqual(fs.readFileSync(path.join(target, 'storage'), 'utf8'), 'user settings');
+  // The native installer is for Windows (LabelPlus-Nondum is Windows only)
+  if (process.platform === 'win32') {
+    Object.keys(files).forEach(name => {
+      fs.mkdirSync(path.dirname(path.join(source, name)), { recursive: true });
+      fs.writeFileSync(path.join(source, name), files[name]);
+    });
+    const installer = ['powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.resolve(__dirname, 'helpers/runWindowsInstallerFixture.ps1')]];
+    const runInstaller = () => spawnSync(installer[0], installer[1], { encoding: 'utf8', env: { ...process.env, TYPER_INSTALL_SOURCE: source, TYPER_INSTALL_TARGET: target, TYPER_INSTALL_SKIP_DEBUG: '1' } });
+    const good = runInstaller(); assert.strictEqual(good.status, 0, good.stderr + good.stdout);
+    assert.strictEqual(fs.readFileSync(path.join(target, 'storage'), 'utf8'), 'user settings');
+    assert(!fs.existsSync(path.join(target, 'app/old-hashed-chunk.js')), 'offline installer replaces all owned folders');
+    fs.writeFileSync(path.join(source, 'app/index.js'), 'broken');
+    const bad = runInstaller(); assert.notStrictEqual(bad.status, 0);
+    assert.strictEqual(fs.readFileSync(path.join(target, 'app/index.js'), 'utf8'), 'new app/index.js');
+    fs.unlinkSync(path.join(source, 'app/package.sha256'));
+    assert.notStrictEqual(runInstaller().status, 0);
+    assert.strictEqual(fs.readFileSync(path.join(target, 'storage'), 'utf8'), 'user settings');
+  }
   console.log('Release safety tests passed: integrity, version, rollback, lazy chunks and native installer');
 } finally { fs.rmSync(root, { recursive: true, force: true }); }

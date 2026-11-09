@@ -2,7 +2,7 @@
 
 ## 1.0.0
 
-First release of LabelPlus-Nondum, built on TypeR 3.0.1.
+First release of LabelPlus-Nondum, built on TypeR 3.0.1. Windows only.
 
 - Import a LabelPlus translation into a whole chapter of PSDs: one layer group per LabelPlus group, vertical point text, the translator's line breaks kept, each page opened once.
 - A style per group, chosen in the import window, which holds the full style editor.

@@ -319,37 +319,6 @@ const typerPackage = ccx({ id: "com.dryiceee.labelplus-nondum", version: "3.0.0"
   assert.strictEqual(forcedNode.calls.length, 0);
   assert.strictEqual(parseUpdateTestConfig({ enabled: true, releasesUrl: "http://127.0.0.1:1/r", currentVersion: "3.0.0", forceManualPluginInstall: true }).forceManualPluginInstall, true);
 
-  // The install script, on its own sandbox: same files and same registration
-  if (process.platform === "darwin") {
-    const packageFile = path.join(sandbox, "TypeR-UXP.ccx");
-    fs.writeFileSync(packageFile, fullPackage);
-    const scriptRoot = path.join(sandbox, "script", "UXP");
-    const runScript = (args) => childProcess.spawnSync("bash", [path.resolve(__dirname, "../installer/install_mac.sh"), "--uxp", ...args], {
-      encoding: "utf8",
-      env: { ...process.env, TYPER_UXP_ROOT: scriptRoot, TYPER_INSTALL_NO_UPIA: "1", TYPER_INSTALL_TARGET: path.join(sandbox, "no-cep"), TYPER_INSTALL_SOURCE: path.resolve(__dirname, "..") },
-    });
-    fs.mkdirSync(path.join(scriptRoot, "PluginsInfo", "v1"), { recursive: true });
-    fs.writeFileSync(path.join(scriptRoot, "PluginsInfo", "v1", "PS.json"), JSON.stringify({ plugins: [otherPlugin] }));
-    const installedByScript = runScript([packageFile]);
-    assert.strictEqual(installedByScript.status, 0, installedByScript.stderr + installedByScript.stdout);
-    assert.strictEqual(fs.readFileSync(path.join(scriptRoot, "Plugins", "External", "com.dryiceee.labelplus-nondum_3.1.0", "web", "index.js"), "utf8"), "// panel");
-    const scriptRegistry = JSON.parse(fs.readFileSync(path.join(scriptRoot, "PluginsInfo", "v1", "PS.json"), "utf8"));
-    assert.deepStrictEqual(scriptRegistry.plugins[0], otherPlugin, "other plugins are kept");
-    assert.deepStrictEqual(scriptRegistry, JSON.parse(manual.registerPlugin(JSON.stringify({ plugins: [otherPlugin] }), { id: "com.dryiceee.labelplus-nondum", name: "TypeR", version: "3.1.0", host: { minVersion: "26.0.0" } })), "same registration as the panels");
-    // A Legacy panel still installed gets its new name; none is created
-    assert.strictEqual(fs.existsSync(path.join(sandbox, "no-cep", "CSXS")), false);
-    const scriptManifest = path.join(sandbox, "no-cep", "CSXS", "manifest.xml");
-    fs.mkdirSync(path.dirname(scriptManifest), { recursive: true });
-    fs.writeFileSync(scriptManifest, packagedManifest);
-    const renamedByScript = runScript([packageFile]);
-    assert.strictEqual(renamedByScript.status, 0, renamedByScript.stderr + renamedByScript.stdout);
-    assert.strictEqual(fs.readFileSync(scriptManifest, "utf8"), oldManifest, "same renaming as the panels");
-    assert.deepStrictEqual(fs.readdirSync(path.dirname(scriptManifest)), ["manifest.xml"]);
-    fs.writeFileSync(packageFile, ccx({ id: "com.other.plugin", version: "1.0.0" }));
-    fs.writeFileSync(scriptManifest, packagedManifest);
-    assert.notStrictEqual(runScript([packageFile]).status, 0, "only a TypeR package");
-    assert.strictEqual(fs.readFileSync(scriptManifest, "utf8"), packagedManifest, "a failed installation renames nothing");
-  }
   fs.rmSync(sandbox, { recursive: true, force: true });
 
   // Outside a CEP panel there is nothing to switch
