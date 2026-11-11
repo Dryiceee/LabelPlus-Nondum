@@ -505,7 +505,136 @@ async function lpAlignSelected() {
   }
 }
 
+/* ------------------------------ pages ------------------------------ */
+// The page bar of the main panel (app_src/pageNav): a page turn saves the
+// page left behind and keeps it open, so its history stays; only the pages
+// past the limit are saved and closed.
+
+const documentPath = (doc) => {
+  try {
+    return (doc && doc.path) || "";
+  } catch (unsavedDocument) {
+    return "";
+  }
+};
+
+const activeDocumentPath = () => {
+  try {
+    return documentPath(ps.app.activeDocument);
+  } catch (noDocument) {
+    return "";
+  }
+};
+
+const isDirty = (doc) => {
+  try {
+    return doc.saved === false;
+  } catch (unknown) {
+    return true;
+  }
+};
+
+const samePath = (a, b) => String(a || "").replace(/\//g, "\\").toLowerCase() === String(b || "").replace(/\//g, "\\").toLowerCase();
+
+// Which of `paths` are open, in the order Photoshop opened them, and the path
+// of the active document
+function lpOpenPages(paths) {
+  try {
+    const wanted = paths || [];
+    const open = [];
+    const documents = ps.app.documents;
+    for (let index = 0; index < documents.length; index++) {
+      const path = documentPath(documents[index]);
+      const match = path ? wanted.find((item) => samePath(item, path)) : null;
+      if (match && open.indexOf(match) < 0) open.push(match);
+    }
+    return answer({ ok: true, open, active: activeDocumentPath() });
+  } catch (error) {
+    return failure("list", error);
+  }
+}
+
+// data: { from, to, close: [paths] }. Saves `from` when it has changes, then
+// brings `to` to the front (opening it when needed), then saves and closes
+// each page of `close`. A page that cannot be saved is never closed, and a
+// failed save of `from` stops the turn, so nothing is lost silently.
+// answers { ok, saved: [paths], closed: [paths], issues: [{ page, code, message }] }
+async function lpTurnPage(data) {
+  if (!(await host._fileExists(data.to))) return failure("psdMissing");
+  const saved = [];
+  const closed = [];
+  const issues = [];
+  let stop = null;
+  try {
+    await modal("LabelPlus-Nondum Page", async () => {
+      const leaving = data.from ? host._findOpenDocumentByPath(data.from) : null;
+      if (leaving && isDirty(leaving)) {
+        try {
+          await leaving.save();
+          saved.push(data.from);
+        } catch (saveError) {
+          stop = { code: "pageSave", error: saveError };
+          return;
+        }
+      }
+      try {
+        const target = host._findOpenDocumentByPath(data.to);
+        if (target) ps.app.activeDocument = target;
+        else await host._openDocument(data.to);
+      } catch (openError) {
+        stop = { code: "pageOpen", error: openError };
+        return;
+      }
+      for (const path of data.close || []) {
+        const doc = host._findOpenDocumentByPath(path);
+        if (!doc) continue;
+        try {
+          if (isDirty(doc)) {
+            await doc.save();
+            saved.push(path);
+          }
+          await doc.closeWithoutSaving();
+          closed.push(path);
+        } catch (closeError) {
+          issues.push({ page: path, code: "pageClose", message: String(closeError.message || closeError) });
+        }
+      }
+    });
+  } catch (error) {
+    return failure("pageOpen", error);
+  }
+  if (stop) return failure(stop.code, stop.error);
+  return answer({ ok: true, saved, closed, issues, active: activeDocumentPath() });
+}
+
+// Closes the open ones of `paths`. options.save: changes are saved first (the
+// page bar's limit), and a page that cannot be saved stays open; without it
+// nothing is saved (the import is about to write over them).
+async function lpClosePages(paths, options) {
+  const save = !!(options && options.save);
+  const closed = [];
+  const issues = [];
+  try {
+    await modal("LabelPlus-Nondum Close", async () => {
+      for (const path of paths || []) {
+        const doc = host._findOpenDocumentByPath(path);
+        if (!doc) continue;
+        try {
+          if (save && isDirty(doc)) await doc.save();
+          await doc.closeWithoutSaving();
+          closed.push(path);
+        } catch (closeError) {
+          issues.push({ page: path, code: "pageClose", message: String(closeError.message || closeError) });
+        }
+      }
+    });
+    return answer({ ok: true, closed, issues });
+  } catch (error) {
+    return failure("pageClose", error);
+  }
+}
+
 module.exports = {
-  methods: { lpReadText, lpWriteText, lpListFolder, lpActiveDocumentName, lpImportPage, lpProcessPage, lpAlignSelected },
+  methods: { lpReadText, lpWriteText, lpListFolder, lpActiveDocumentName, lpImportPage, lpProcessPage, lpAlignSelected, lpOpenPages, lpTurnPage, lpClosePages },
   _internals: { collectTextLayers, pointBox },
 };

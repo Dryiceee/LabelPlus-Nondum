@@ -22,7 +22,7 @@ methods.forEach((name) => assert.ok(new RegExp("function " + name + "\\b").test(
 assert.ok(read("uxp-src/host/main.js").includes("...labelplus.methods"), "main.js exposes the LabelPlus calls");
 
 const panelCalls = unique(
-  ["app_src/components/modal/labelPlus.jsx", "app_src/labelplus/chapterRun.js"]
+  ["app_src/components/modal/labelPlus.jsx", "app_src/labelplus/chapterRun.js", "app_src/pageNav/pageNav.js"]
     .flatMap((file) => [...read(file).matchAll(/(?:callHost|host\.call)\("(\w+)"/g)].map((match) => match[1]))
 );
 assert.ok(panelCalls.length >= 5, "the panel calls were found");

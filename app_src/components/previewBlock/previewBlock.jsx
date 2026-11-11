@@ -19,6 +19,7 @@ import TextShapeRFitPreview from "../textShapeRFitPreview";
 import { createPanelSnapshotQueue } from "./panelSnapshot";
 import { getInterfaceLanguage } from "../../interfaceLanguage";
 import { loadTextShapeREngine } from "../../textShapeREngineLoader";
+import PageNav from "./pageNav";
 
 const requestPanelSnapshot = createPanelSnapshotQueue((script, callback) => csInterface.evalScript(script, callback));
 const normalizeLayerText = (text) => String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
@@ -1286,6 +1287,7 @@ const PreviewBlock = React.memo(function PreviewBlock() {
           )}
         </div>}
       </div>
+      <PageNav />
       {(uiVisible.previewNav !== false || uiVisible.previewWidget !== false) && (
       <div className="preview-bottom">
         {uiVisible.previewNav !== false && (

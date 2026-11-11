@@ -17,6 +17,14 @@ const SECTIONS = [
   },
   {
     tab: "general",
+    group: "settingsGroupPages",
+    entries: [
+      { title: "settingsPageOpenAfterImport", hint: "settingsPageOpenAfterImportHint", keywords: "page pages labelplus import psd 翻页 打开" },
+      { title: "settingsPageMaxOpen", hint: "settingsPageMaxOpenHint", keywords: "page pages history historique limit 翻页 历史记录 关闭" },
+    ],
+  },
+  {
+    tab: "general",
     group: "settingsGroupAppUpdates",
     entries: [
       { title: "settingsCheckUpdatesLabel", requires: "updates", keywords: "update version mise jour maj" },

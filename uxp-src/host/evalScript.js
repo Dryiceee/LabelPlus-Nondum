@@ -75,6 +75,8 @@ const CALL_TIMEOUTS = {
   lpImportPage: LONG_CALL_TIMEOUT_MS,
   lpProcessPage: LONG_CALL_TIMEOUT_MS,
   lpAlignSelected: LONG_CALL_TIMEOUT_MS,
+  lpTurnPage: LONG_CALL_TIMEOUT_MS,
+  lpClosePages: LONG_CALL_TIMEOUT_MS,
 };
 
 function callTimeout(script) {

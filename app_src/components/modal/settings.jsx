@@ -22,6 +22,7 @@ import { clearTypeRCache, formatCacheBytes, getTypeRCacheInfo } from "../../cepC
 import { normalizeSettingsTab, readSettingsTab, writeSettingsTab } from "../../settingsTab";
 import { buildSettingsSearchIndex, findSettingRow, searchSettings } from "../../settingsSearch";
 import SettingsSearchResults from "./settingsSearchResults";
+import { MIN_MAX_OPEN, MAX_MAX_OPEN, normalizeMaxOpen, remindAt } from "../../pageNav/pageNavLogic";
 
 // Shortcuts tab: commands grouped by what they act on. A command missing
 // here still shows, in the last group, so a new one is never hidden.
@@ -29,6 +30,7 @@ const SHORTCUT_GROUPS = [
   { id: "centering", labelKey: "settingsGroupCentering", fallback: "Centering", commands: ["center"] },
   { id: "styles", labelKey: "settingsShortcutGroupStyles", fallback: "Styles and size", commands: ["applyStyle", "previousStyle", "nextStyle", "increase", "decrease", "toggleStyleStroke"] },
   { id: "modes", labelKey: "settingsShortcutGroupModes", fallback: "Modes", commands: ["toggleCleaningLayers"] },
+  { id: "pages", labelKey: "settingsShortcutGroupPages", fallback: "Pages", commands: ["previousPsd", "nextPsd"] },
 ];
 const groupShortcutCommands = (commands) => {
   const groups = SHORTCUT_GROUPS.map((group) => ({
@@ -57,6 +59,8 @@ const SettingsModal = React.memo(function SettingsModal() {
     uiLayout: state.uiLayout,
     styles: state.styles,
     modalData: state.modalData,
+    pageNavOpenAfterImport: state.pageNavOpenAfterImport,
+    pageNavMaxOpen: state.pageNavMaxOpen,
   }));
   // Another window can open a given tab; otherwise the settings reopen on the
   // last tab the user looked at
@@ -64,6 +68,8 @@ const SettingsModal = React.memo(function SettingsModal() {
   const [language, setLanguage] = React.useState(context.state.language || "auto");
   const [checkUpdates, setCheckUpdates] = React.useState(context.state.checkUpdates !== false);
   const [autoUpdate, setAutoUpdate] = React.useState(context.state.autoUpdate === true);
+  const [pageOpenAfterImport, setPageOpenAfterImport] = React.useState(context.state.pageNavOpenAfterImport !== false);
+  const [pageMaxOpen, setPageMaxOpen] = React.useState(String(normalizeMaxOpen(context.state.pageNavMaxOpen)));
   const [editorTheme, setEditorTheme] = React.useState(context.state.editorTheme || "system");
   const [uiScale, setUiScale] = React.useState(String(normalizeUiLayout(context.state.uiLayout).sizes.uiScale));
   const [shortcutDraft, setShortcutDraft] = React.useState(() => ({ ...context.state.shortcut }));
@@ -234,6 +240,12 @@ const SettingsModal = React.memo(function SettingsModal() {
     });
     if (JSON.stringify(layoutToSave) !== JSON.stringify(current)) {
       context.dispatch({ type: "setUiLayout", layout: layoutToSave });
+    }
+    if (pageOpenAfterImport !== context.state.pageNavOpenAfterImport) {
+      context.dispatch({ type: "setPageNavOpenAfterImport", value: pageOpenAfterImport });
+    }
+    if (normalizeMaxOpen(pageMaxOpen) !== context.state.pageNavMaxOpen) {
+      context.dispatch({ type: "setPageNavMaxOpen", value: pageMaxOpen });
     }
     context.dispatch({ type: "updateShortcut", shortcut: shortcutDraft });
     closeModal();
@@ -510,6 +522,42 @@ const SettingsModal = React.memo(function SettingsModal() {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+            </div>
+            <div className="settings-group">
+              <div className="settings-group-title">{locale.settingsGroupPages}</div>
+              <div className="settings-checkbox-grid">
+                {renderToggle(
+                  pageOpenAfterImport,
+                  (e) => {
+                    setPageOpenAfterImport(e.target.checked);
+                    setEdited(true);
+                  },
+                  locale.settingsPageOpenAfterImport,
+                  locale.settingsPageOpenAfterImportHint
+                )}
+              </div>
+              <div className="field">
+                <div className="field-label">{locale.settingsPageMaxOpen}</div>
+                <div className="field-input">
+                  <input
+                    type="number"
+                    min={MIN_MAX_OPEN}
+                    max={MAX_MAX_OPEN}
+                    className="topcoat-text-input"
+                    value={pageMaxOpen}
+                    onChange={(e) => {
+                      setPageMaxOpen(e.target.value);
+                      setEdited(true);
+                    }}
+                    onBlur={() => setPageMaxOpen(String(normalizeMaxOpen(pageMaxOpen)))}
+                  />
+                </div>
+                <div className="field-descr">
+                  {(locale.settingsPageMaxOpenHint || "")
+                    .replace("{remind}", remindAt(pageMaxOpen))
+                    .replace("{max}", normalizeMaxOpen(pageMaxOpen))}
                 </div>
               </div>
             </div>

@@ -17,6 +17,7 @@ import { buildSelectedLayerPayload, buildStoredSelectionPayload, getScaledStyle 
 import { canSmartPasteStoredSelections, smartPasteInSelection, smartPasteStoredSelections } from "./smartPasteClient";
 import { isStyleStrokeOn } from "./styleStroke";
 import { isWindowTooShortForTextShapeR } from "./uiLayout";
+import { turnPageCommand } from "./pageNav/pageCommands";
 
 // Footer toggle and shortcut. The saved choice is left alone while the window is
 // too short, so TextShapeR comes back as soon as the window is tall enough.
@@ -437,6 +438,21 @@ const shortcutCommands = [
     repeatDelay: 300,
     handler: (ctx) => switchTab(ctx, 1),
   },
+  // Page bar (app_src/pageNav): no keys until the user picks some
+  {
+    id: "previousPsd",
+    label: "shortcut_previousPsd",
+    defaultKeys: [],
+    repeatDelay: 400,
+    handler: (ctx) => turnPageCommand(ctx, -1),
+  },
+  {
+    id: "nextPsd",
+    label: "shortcut_nextPsd",
+    defaultKeys: [],
+    repeatDelay: 400,
+    handler: (ctx) => turnPageCommand(ctx, 1),
+  },
 ];
 
 // What this edition offers: the commands of the hidden script and paste
@@ -444,6 +460,7 @@ const shortcutCommands = [
 // show in the settings.
 const PRODUCT_COMMAND_IDS = [
   "center", "applyStyle", "previousStyle", "nextStyle", "increase", "decrease", "toggleStyleStroke", "toggleCleaningLayers",
+  "previousPsd", "nextPsd",
 ];
 const productShortcutCommands = shortcutCommands.filter((command) => PRODUCT_COMMAND_IDS.indexOf(command.id) !== -1);
 

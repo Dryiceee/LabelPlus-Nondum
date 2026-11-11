@@ -1,0 +1,48 @@
+// The page bar under Align (pageNav.jsx): a project row and a page row, in
+// the room the hidden script preview left
+.page-nav-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-width: 0;
+
+  &.is-busy {
+    opacity: 0.6;
+  }
+}
+
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-width: 0;
+
+  &.is-busy {
+    opacity: 0.6;
+  }
+
+  .page-nav_arrow {
+    flex: 0 0 auto;
+  }
+
+  .page-nav_select {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 27px;
+    padding: 0 6px;
+    font-size: 11px;
+    text-overflow: ellipsis;
+  }
+
+  .page-nav_folder {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}

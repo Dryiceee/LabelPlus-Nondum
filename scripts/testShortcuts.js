@@ -177,6 +177,9 @@ const mockRequire = (request) => {
       canSmartPasteStoredSelections: () => false,
     };
   }
+  if (request === "./pageNav/pageCommands") {
+    return { turnPageCommand: (ctx, delta) => utilityCalls.push(["turnPage", delta]) };
+  }
   throw new Error(`Unexpected shortcutCommands dependency: ${request}`);
 };
 new Function("require", "module", "exports", transformedCommands)(
@@ -687,6 +690,21 @@ assert.deepStrictEqual(defaultShortcuts.decrease, ["CTRL", "ALT", "D"]);
   });
   assert.deepStrictEqual(taken.shortcuts.previous, ["CTRL", "TAB"], "The old default stays when the new one is taken");
   assert.strictEqual(taken.migrated, false);
+}
+
+// The page bar shortcuts turn PSD pages and show in this edition, with no keys
+{
+  const { shortcutCommands, productShortcutCommands } = commandModule.exports;
+  const previousPsd = shortcutCommands.find((command) => command.id === "previousPsd");
+  const nextPsd = shortcutCommands.find((command) => command.id === "nextPsd");
+  assert.deepStrictEqual(previousPsd.defaultKeys, []);
+  assert.deepStrictEqual(nextPsd.defaultKeys, []);
+  assert.ok(productShortcutCommands.includes(previousPsd) && productShortcutCommands.includes(nextPsd));
+  assert.ok(!productShortcutCommands.some((command) => command.id === "nextPage"), "the script page commands stay hidden");
+  utilityCalls.length = 0;
+  previousPsd.handler({ state: {}, dispatch() {} });
+  nextPsd.handler({ state: {}, dispatch() {} });
+  assert.deepStrictEqual(utilityCalls, [["turnPage", -1], ["turnPage", 1]]);
 }
 
 console.log("shortcut registry tests passed");

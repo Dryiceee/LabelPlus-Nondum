@@ -35,6 +35,7 @@ import {
 } from "./styleSizeTip";
 import { normalizeRefontRules } from "./oneClick/refont";
 import { defaultUiLayout, normalizeUiLayout } from "./uiLayout";
+import { normalizeMaxOpen, normalizeRecent } from "./pageNav/pageNavLogic";
 const storage = readStorage();
 // A successful application is the clearest signal that someone is relying on
 // TextShapeR. Five applied suggestions are enough to introduce the learning
@@ -118,6 +119,9 @@ const storeFields = [
   "styleSizeTipShown",
   "resetLineCounterOnPage",
   "tabs",
+  "pageNavRecent",
+  "pageNavMaxOpen",
+  "pageNavOpenAfterImport",
   "currentTabId",
   "uiLayout",
   "editorTheme",
@@ -320,6 +324,15 @@ const initialState = {
   backgroundImage: normalizeBackgroundImage(storage.data?.backgroundImage),
   editorTheme: normalizeEditorTheme(storage.data?.editorTheme),
   stylePrefixRefreshVersion: 0,
+  // Page bar: the projects opened before and its two settings are kept; the
+  // open project is not, so Photoshop starts on the project list
+  pageNavRecent: normalizeRecent(storage.data?.pageNavRecent),
+  pageNavMaxOpen: normalizeMaxOpen(storage.data?.pageNavMaxOpen),
+  pageNavOpenAfterImport: storage.data?.pageNavOpenAfterImport !== false,
+  pageProject: null,
+  // The projects with pages open this session: [{ folder, open }]
+  pageNavOpenProjects: [],
+  pageNavBusy: false,
 };
 
 // Settings of the features this edition hides or removed, which the settings
@@ -1057,7 +1070,48 @@ const baseReducer = (state, action) => {
         id: lastNoticeId,
         text,
         kind: NOTICE_KINDS.indexOf(action.kind) !== -1 ? action.kind : "info",
+        // A long message (the page bar's reminder) can ask for more time
+        duration: Number(action.duration) > 0 ? Number(action.duration) : 0,
       };
+      break;
+    }
+
+    // Page bar (app_src/pageNav). project: { folder, pages, index } or null
+    case "setPageProject": {
+      newState.pageProject = action.project || null;
+      break;
+    }
+
+    case "setPageIndex": {
+      if (!state.pageProject) break;
+      const index = Math.floor(Number(action.index));
+      if (!Number.isFinite(index) || index < 0 || index >= state.pageProject.pages.length || index === state.pageProject.index) break;
+      newState.pageProject = Object.assign({}, state.pageProject, { index });
+      break;
+    }
+
+    case "setPageNavOpenProjects": {
+      newState.pageNavOpenProjects = Array.isArray(action.projects) ? action.projects : [];
+      break;
+    }
+
+    case "setPageNavBusy": {
+      newState.pageNavBusy = !!action.value;
+      break;
+    }
+
+    case "setPageNavRecent": {
+      newState.pageNavRecent = normalizeRecent(action.recent);
+      break;
+    }
+
+    case "setPageNavMaxOpen": {
+      newState.pageNavMaxOpen = normalizeMaxOpen(action.value);
+      break;
+    }
+
+    case "setPageNavOpenAfterImport": {
+      newState.pageNavOpenAfterImport = !!action.value;
       break;
     }
 

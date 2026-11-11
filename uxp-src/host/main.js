@@ -342,6 +342,8 @@ const DOCUMENT_CHANGING_CALLS = {
   smartPasteCommit: "set",
   lpProcessPage: "set",
   lpAlignSelected: "set",
+  lpTurnPage: "select",
+  lpClosePages: "select",
   alignTextLayerToSelection: "set",
   alignTextLayersToDoubleBubble: "set",
   changeActiveLayerTextSize: "set",
@@ -630,7 +632,9 @@ function attachView() {
 /* ====================== Photoshop events ====================== */
 
 // CEP's com.adobe.PhotoshopJSONCallback payload: "ver1,{eventID, eventData}"
-const EVENT_IDS = { select: 1936483188, set: 1936028772, move: 1836021349 };
+// open and close: the page bar counts the pages opened or closed by hand.
+// Photoshop 2025 sends open but not close to plugins: the bar also polls.
+const EVENT_IDS = { select: 1936483188, set: 1936028772, move: 1836021349, open: 1332768288, close: 1131180832 };
 
 function onPhotoshopEvent(name, descriptor) {
   const eventID = EVENT_IDS[name];

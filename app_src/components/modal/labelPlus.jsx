@@ -11,6 +11,7 @@ import { DEFAULT_REPLACEMENTS, activeReplacements, addReplacements, clickRow, re
 import { parseLpText } from "../../labelplus/lpParser";
 import { buildImportPlan, compareNames, detectImageFolder, isImageFile, matchImages, mergeGroupRules, OUTPUT_FOLDER_NAME } from "../../labelplus/importPlan";
 import { dirnameOf, groupIssues, joinPath, processPayload, readSidecar, runImport } from "../../labelplus/chapterRun";
+import { openProject } from "../../pageNav/pageNav";
 
 const SETTINGS_KEY = "labelPlus";
 
@@ -265,10 +266,16 @@ const LabelPlusModal = React.memo(function LabelPlusModal({ front = true }) {
     commitReplacements();
     const existing = (await listFolder(outputFolder)).map((entry) => entry.name.toLowerCase());
     const overwrites = plan.pages.filter((page) => existing.indexOf(page.output.toLowerCase()) >= 0);
+    // Pages the page bar keeps open would be refused: they close first, unsaved,
+    // since the import writes over them anyway
+    const openCheck = overwrites.length ? await callHost("lpOpenPages", overwrites.map((page) => joinPath(outputFolder, page.output))) : null;
+    const openPages = openCheck && openCheck.ok ? openCheck.open : [];
     if (overwrites.length) {
-      const confirmed = await new Promise((resolve) => nativeConfirm(locale.lpOverwriteConfirm.replace("{count}", overwrites.length), locale.lpTitle, resolve));
+      const message = locale.lpOverwriteConfirm.replace("{count}", overwrites.length) + (openPages.length ? " " + locale.lpOverwriteOpen.replace("{count}", openPages.length) : "");
+      const confirmed = await new Promise((resolve) => nativeConfirm(message, locale.lpTitle, resolve));
       if (!confirmed) return;
     }
+    if (openPages.length) await callHost("lpClosePages", openPages);
     startRun();
     const previous = await readSidecar(host, outputFolder);
     const run = await runImport({
@@ -292,6 +299,10 @@ const LabelPlusModal = React.memo(function LabelPlusModal({ front = true }) {
     const stats = withCenter ? statsText(run.stats) : "";
     const trace = withCenter ? run.stats.trace : [];
     finishRun({ title, cancelled: cancelledRun, issues, stats, trace });
+    // The chapter opens in the page bar, on its first new page
+    if (!cancelledRun && run.built.length && context.getState().pageNavOpenAfterImport !== false) {
+      openProject({ dispatch: context.dispatch, getState: context.getState }, outputFolder, { page: run.built[0] });
+    }
   };
 
   // The open document: to try the settings on one page. Nothing is saved.

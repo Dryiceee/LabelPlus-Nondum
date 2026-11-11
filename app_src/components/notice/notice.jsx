@@ -18,15 +18,13 @@ const Notice = React.memo(function Notice() {
   const notice = context.state.notice;
   const noticeId = notice ? notice.id : null;
   const warning = !!notice && notice.kind === "warning";
+  const duration = (notice && notice.duration) || (warning ? WARNING_DURATION_MS : INFO_DURATION_MS);
 
   React.useEffect(() => {
     if (noticeId === null) return undefined;
-    const timer = setTimeout(
-      () => dispatch({ type: "clearNotice", id: noticeId }),
-      warning ? WARNING_DURATION_MS : INFO_DURATION_MS
-    );
+    const timer = setTimeout(() => dispatch({ type: "clearNotice", id: noticeId }), duration);
     return () => clearTimeout(timer);
-  }, [noticeId, warning, dispatch]);
+  }, [noticeId, duration, dispatch]);
 
   if (!notice) return null;
   const Icon = warning ? FiAlertTriangle : FiInfo;
