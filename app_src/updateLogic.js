@@ -41,10 +41,13 @@ const compareVersions = (left, right) => {
 // "typer": those clients then skip it, in whatever order GitHub lists the assets.
 const UXP_PACKAGE = "TypeR-UXP.ccx";
 const UXP_WINDOWS_PACKAGE = "UXP-Windows.ccx";
+// What a LabelPlus-Nondum release publishes: the Windows package under the
+// product's name (scripts/packageRelease.js). The update looks for it first;
+// the TypeR names stay behind it for the dormant TypeR migration code.
+const RELEASE_PACKAGE = "LabelPlus-Nondum-win.ccx";
 
 // The Windows package of a release, whose tag is its version
-// The release names it after the product (scripts/packageRelease.js)
-const windowsPackageUrl = (version) => "https://github.com/Dryiceee/LabelPlus-Nondum/releases/download/" + version + "/LabelPlus-Nondum-win.ccx";
+const windowsPackageUrl = (version) => "https://github.com/Dryiceee/LabelPlus-Nondum/releases/download/" + version + "/" + RELEASE_PACKAGE;
 
 // Only a built release asset is installable. The GitHub "source code" zipball
 // has no compiled app/ folder (webpack output), so installing it would leave a
@@ -55,7 +58,7 @@ const pickUpdateDownloadUrl = (release, extension = ".zip", platform) => {
   if (extension === ".ccx" && platform) {
     const mac = platform === "darwin" || platform === "mac";
     const named = (name) => assets.find(asset => asset && asset.name === name);
-    const target = (!mac && named(UXP_WINDOWS_PACKAGE)) || named(UXP_PACKAGE);
+    const target = (!mac && (named(RELEASE_PACKAGE) || named(UXP_WINDOWS_PACKAGE))) || named(UXP_PACKAGE);
     return target && target.browser_download_url || null;
   }
   const zipAsset = assets.find(
@@ -123,6 +126,14 @@ const manifestNeedsRestart = (installed, updated) => (
   typeof installed !== "string" || manifestForComparison(installed) !== manifestForComparison(updated)
 );
 
+// Whether the panel checks for updates, from the stored settings. 1.0.0 had the
+// setting hidden and stored its default, false, with every other setting: that
+// was never a choice. Only a value set in Settings since (checkUpdatesSet)
+// counts; otherwise the build's default applies.
+const storedCheckUpdates = (data, fallback) => (
+  data && data.checkUpdatesSet === true ? data.checkUpdates !== false : fallback !== false
+);
+
 const shouldRunUpdateCheck = (lastCheckAt, now, interval = UPDATE_CHECK_INTERVAL) => {
   const last = Number(lastCheckAt) || 0;
   if (last <= 0) return true;
@@ -136,6 +147,7 @@ export {
   UPDATE_CHECK_INTERVAL,
   UXP_PACKAGE,
   UXP_WINDOWS_PACKAGE,
+  RELEASE_PACKAGE,
   windowsPackageUrl,
   INSTALL_FOLDERS,
   parseVersion,
@@ -146,4 +158,5 @@ export {
   mapZipEntryToTargetPath,
   manifestNeedsRestart,
   shouldRunUpdateCheck,
+  storedCheckUpdates,
 };

@@ -28,7 +28,23 @@ assert.ok(batch.indexOf("%APPDATA%\\Adobe\\UXP\\PluginsInfo\\v1\\PS.json") !== -
 assert.ok(/\r\n/.test(batch) && !/[^\r]\n/.test(batch), "The Windows script has CRLF line endings");
 assert.ok(!/^timeout /m.test(batch), "timeout refuses to run without a console");
 assert.ok(/^[\x00-\x7f]*$/.test(script.windowsUpdateCommand()));
-assert.ok(script.windowsUpdateCommand().indexOf("%APPDATA%\\TypeR\\UXP\\update\\typer-update.cmd") !== -1);
+// The command starts the script where the host writes it: the update folder of
+// getStorageRoot() (uxp-src/host/files.js), read with %APPDATA% in its place
+{
+  const appData = "C:\\Users\\ana\\AppData\\Roaming";
+  const stubs = {
+    uxp: { storage: { formats: {}, localFileSystem: {} } },
+    os: { platform: () => "win32", homedir: () => "C:\\Users\\ana" },
+    fs: {},
+  };
+  const hostFiles = { exports: {} };
+  new Function("require", "module", "exports", fs.readFileSync(path.join(__dirname, "..", "uxp-src/host/files.js"), "utf8"))((name) => stubs[name], hostFiles, hostFiles.exports);
+  const root = hostFiles.exports.getStorageRoot();
+  assert.ok(root.startsWith(appData + "\\"), root);
+  const written = "%APPDATA%" + root.slice(appData.length) + "\\" + script.UPDATE_FOLDER + "\\" + script.UPDATE_SCRIPT_WINDOWS;
+  assert.strictEqual(written, "%APPDATA%\\LabelPlus-Nondum\\UXP\\update\\labelplus-update.cmd");
+  assert.ok(script.windowsUpdateCommand().indexOf('"' + written + '"') !== -1, "The command starts the script the host wrote: " + script.windowsUpdateCommand());
+}
 
 if (process.platform === "win32") {
   require("./helpers/testWindowsUxpUpdate")(script, options);

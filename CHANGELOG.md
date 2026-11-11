@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0
+
+1.0.0 has no update in the panel: update it once by hand, with `installer\update_win.cmd` from LabelPlus-Nondum.zip or by installing again. From 1.1.0 on, new versions are offered in the panel.
+
+- Page bar under Align: pick a folder of PSDs (the last LabelPlus import's, or any) and turn through it with ◀ ▶ or a page list. The project goes by the name of the folder holding it; recent projects are listed when none is open.
+- A page turn saves the page left behind and keeps it open, so its history stays. A reminder comes five pages before the limit (20 open pages by default, set in Settings); past it, the page looked at longest ago is saved and closed. Files opened by hand count too.
+- Several projects at once: the bar follows the active document, the limit counts every project, and closing a project asks first.
+- Previous and next page shortcuts, the last page of each project remembered, and the first page opened after a LabelPlus import (a setting).
+- PSDs a LabelPlus import is about to overwrite are closed first without saving, after asking.
+- Updates: LabelPlus-Nondum checks this repository's releases once a day and offers to install a newer version. Automatic installation stays off unless you turn it on in Settings.
+
 ## 1.0.0
 
 First release of LabelPlus-Nondum, built on TypeR 3.0.1. Windows only.

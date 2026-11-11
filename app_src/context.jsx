@@ -3,7 +3,7 @@ import { parsePageMarker } from "./pageMarker";
 import React from "react";
 import PropTypes from "prop-types";
 import { locale, readStorage, writeToStorage, scrollToLine, scrollToStyle, getUpdateTestConfig, clearUpdateTestConfig, checkUpdate, prefetchUpdateZip, downloadAndInstallUpdate, nativeAlert } from "./utils";
-import { shouldRunUpdateCheck } from "./updateLogic";
+import { shouldRunUpdateCheck, storedCheckUpdates } from "./updateLogic";
 import { getNode, readUxpMigrationState, syncLegacyPanelName } from "./uxpMigration";
 import config from "./config";
 import { getNextLineNumberState } from "./lineNumbering";
@@ -84,6 +84,7 @@ const storeFields = [
   "defaultStyleId",
   "autoClosePSD",
   "checkUpdates",
+  "checkUpdatesSet",
   "autoUpdate",
   "currentFolderTagPriority",
   "resizeTextBoxOnCenter",
@@ -288,6 +289,8 @@ const initialState = {
   styleSizeStep: 1,
   resetLineCounterOnPage: storage.data?.resetLineCounterOnPage !== false,
   ...storage.data,
+  // 1.0.0 stored false without asking: only a choice made since counts
+  checkUpdates: storedCheckUpdates(storage.data, config.checkUpdates),
   textShapeRUsageCount: Math.min(
     TEXT_SHAPER_LEARN_TIP_THRESHOLD,
     Math.max(0, Math.floor(Number(storage.data?.textShapeRUsageCount) || 0))
@@ -972,6 +975,7 @@ const baseReducer = (state, action) => {
 
   case "setCheckUpdates": {
     newState.checkUpdates = !!action.value;
+    newState.checkUpdatesSet = true;
     break;
   }
 

@@ -21,8 +21,11 @@ export const UPDATE_FALLBACK = "fallback";
 export const UPDATE_REGISTRY = "PS.json";
 export const UPDATE_STATUS_RESTART = "restart";
 export const UPDATE_STATUS_FAILED = "failed";
-export const UPDATE_SCRIPT_MAC = "typer-update.sh";
-export const UPDATE_SCRIPT_WINDOWS = "typer-update.cmd";
+export const UPDATE_SCRIPT_MAC = "labelplus-update.sh";
+export const UPDATE_SCRIPT_WINDOWS = "labelplus-update.cmd";
+// The plugin's storage under %APPDATA%, where the update folder is: the same
+// folder as getStorageRoot() in uxp-src/host/files.js (testUxpUpdateScript.js)
+export const STORAGE_FOLDER_WINDOWS = "LabelPlus-Nondum\\UXP";
 
 const INSTALL_ATTEMPTS = 3;
 
@@ -142,4 +145,4 @@ export const buildWindowsUpdateScript = ({ upia, pluginName, pluginFolder }) => 
 // The command that starts the script in the background. Photoshop would wait
 // for it otherwise, with its main thread held.
 export const macUpdateCommand = (scriptPath) => "( sh " + shellQuote(scriptPath) + " ) >/dev/null 2>&1 &";
-export const windowsUpdateCommand = () => 'start "" /B cmd /c "%APPDATA%\\TypeR\\UXP\\' + UPDATE_FOLDER + "\\" + UPDATE_SCRIPT_WINDOWS + '"';
+export const windowsUpdateCommand = () => 'start "" /B cmd /c "%APPDATA%\\' + STORAGE_FOLDER_WINDOWS + "\\" + UPDATE_FOLDER + "\\" + UPDATE_SCRIPT_WINDOWS + '"';

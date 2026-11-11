@@ -22,6 +22,9 @@ const {
   findZipRootPrefix,
   mapZipEntryToTargetPath,
   shouldRunUpdateCheck,
+  RELEASE_PACKAGE,
+  windowsPackageUrl,
+  storedCheckUpdates,
 } = logicModule.exports;
 
 // --- parseVersion / compareVersions ---
@@ -81,6 +84,33 @@ const clientOf300 = (release) => release.assets.find((asset) => asset.name.toLow
 const releasedAssets = ["TypeR-UXP.ccx", "UXP-Windows.ccx", "TypeR.zip"].map((name) => ({ name, browser_download_url: name }));
 assert.strictEqual(clientOf300({ assets: releasedAssets }), "TypeR-UXP.ccx");
 assert.strictEqual(clientOf300({ assets: [...releasedAssets].reverse() }), "TypeR-UXP.ccx");
+
+// --- storedCheckUpdates ---
+// 1.0.0 stored its hidden default, false: the build's default wins over it
+assert.strictEqual(storedCheckUpdates({ checkUpdates: false }, true), true);
+assert.strictEqual(storedCheckUpdates(undefined, true), true);
+assert.strictEqual(storedCheckUpdates({}, false), false);
+// A choice made in Settings stays
+assert.strictEqual(storedCheckUpdates({ checkUpdates: false, checkUpdatesSet: true }, true), false);
+assert.strictEqual(storedCheckUpdates({ checkUpdates: true, checkUpdatesSet: true }, false), true);
+
+// --- LabelPlus-Nondum releases ---
+// The assets of the published 1.0.0 release, as GitHub lists them
+const nondumRelease = { tag_name: "1.1.0", draft: false, prerelease: false, assets: [
+  "LabelPlus-Nondum-win.ccx", "LabelPlus-Nondum-win.ccx.sha256", "LabelPlus-Nondum.zip", "LabelPlus-Nondum.zip.sha256",
+].map((name) => ({ name, browser_download_url: "https://github.com/Dryiceee/LabelPlus-Nondum/releases/download/1.1.0/" + name })) };
+assert.strictEqual(RELEASE_PACKAGE, "LabelPlus-Nondum-win.ccx");
+assert.strictEqual(pickUpdateDownloadUrl(nondumRelease, ".ccx", "win32"), nondumRelease.assets[0].browser_download_url);
+assert.deepStrictEqual(findNewerReleases([nondumRelease], "1.0.0", ".ccx", "win32").map((r) => r.tag_name), ["1.1.0"]);
+assert.deepStrictEqual(findNewerReleases([nondumRelease], "1.1.0", ".ccx", "win32"), []);
+assert.strictEqual(windowsPackageUrl("1.1.0"), nondumRelease.assets[0].browser_download_url);
+// The product package goes before TypeR's Windows name
+assert.strictEqual(pickUpdateDownloadUrl({ assets: [{ name: "UXP-Windows.ccx", browser_download_url: "typer" }, nondumRelease.assets[0]] }, ".ccx", "win32"), nondumRelease.assets[0].browser_download_url);
+// The release script publishes the package under that same name
+assert.ok(
+  require("fs").readFileSync(require("path").join(__dirname, "packageRelease.js"), "utf8").indexOf('"' + RELEASE_PACKAGE + '"') !== -1,
+  "scripts/packageRelease.js publishes " + RELEASE_PACKAGE
+);
 
 // --- findNewerReleases ---
 const releases = [

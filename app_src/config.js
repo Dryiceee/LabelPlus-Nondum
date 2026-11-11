@@ -1,6 +1,6 @@
 const config = {
   appTitle: "LabelPlus-Nondum",
-  appVersion: "1.0.0",
+  appVersion: "1.1.0",
   appUrl: "https://github.com/Dryiceee/LabelPlus-Nondum",
   typerToolsUrl: "https://swirt.github.io/typertools/",
   authorName: "dryice",
@@ -9,9 +9,12 @@ const config = {
   authorUrl2: "",
   exportFileName: "LabelPlus-Nondum_Export",
   defaultPrefixColor: "#FFF3B0",
-  // Off for 1.0.0: the update code reads this repository's releases once on
-  checkUpdates: false,
-  updatesEnabled: false,
+  // Updates: the panel reads this repository's releases at most once a day and
+  // offers LabelPlus-Nondum-win.ccx of a newer one (updateLogic.js). 1.0.0
+  // shipped with both off, so its users update once by hand.
+  // checkUpdates is the default of the setting; updatesEnabled shows it at all
+  checkUpdates: true,
+  updatesEnabled: true,
   languages: {
     auto: "Auto",
     zh_CN: "简体中文",
