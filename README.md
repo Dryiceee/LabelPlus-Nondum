@@ -109,8 +109,6 @@ irm https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.ps1 | i
 
 </details>
 
-<details>
-
 ## 从源码构建
 
 ```bash
