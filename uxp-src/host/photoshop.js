@@ -11,7 +11,7 @@ const uxp = require("uxp");
 const jamText = require("./jamText");
 const { resolveTypeRFontVariant } = require("../../app_src/fontVariantResolver.jsxinc");
 const keyboard = require("./keyboard");
-const { buildLayerEffects } = require("../../app_src/labelplus/layerEffects");
+const { buildLayerEffects, resolveGlobalLight } = require("../../app_src/labelplus/layerEffects");
 
 const { batchPlay } = ps.action;
 
@@ -1746,13 +1746,42 @@ function _setLayerStroke(stroke) {
   });
 }
 
-// The layer's whole layerEffects as Photoshop gives it, or null
-function _getLayerEffects() {
+// The document's global light, for the effects set to use it. Photoshop
+// gives it as { _obj: "globalAngle", globalLightingAngle, globalAltitude }.
+function _globalLight() {
+  const number = (value) => {
+    const plain = value && typeof value === "object" ? value._value : value;
+    return typeof plain === "number" && isFinite(plain) ? plain : null;
+  };
+  let value = null;
   try {
-    return get([{ _property: "layerEffects" }, TARGET_LAYER]).layerEffects || null;
+    value = get([{ _property: "globalAngle" }, TARGET_DOCUMENT]).globalAngle;
+  } catch (lightError) {
+    return { angle: null, altitude: null };
+  }
+  if (value && typeof value === "object" && !("_value" in value)) {
+    return { angle: number(value.globalLightingAngle), altitude: number(value.globalAltitude) };
+  }
+  return { angle: number(value), altitude: null };
+}
+
+// A layer's whole layerEffects as Photoshop gives it, or null; the effects
+// that use the global light get the document's angle written in
+// (app_src/labelplus/layerEffects.js resolveGlobalLight)
+function _readLayerEffects(reference) {
+  let layerEffects = null;
+  try {
+    layerEffects = get([{ _property: "layerEffects" }, reference]).layerEffects || null;
   } catch (effectsError) {
     return null;
   }
+  if (!layerEffects) return null;
+  const light = _globalLight();
+  return resolveGlobalLight(layerEffects, light.angle, light.altitude);
+}
+
+function _getLayerEffects() {
+  return _readLayerEffects(TARGET_LAYER);
 }
 
 // A style's layer styles and stroke replace the layer's; a style with none
@@ -1764,7 +1793,11 @@ function _applyStyleEffects(style) {
     play({ _obj: "set", _target: [{ _ref: "property", _property: "layerEffects" }, TARGET_LAYER], to: effects });
     return;
   }
-  if (!_getLayerEffects()) return;
+  let current = null;
+  try {
+    current = get([{ _property: "layerEffects" }, TARGET_LAYER]).layerEffects || null;
+  } catch (effectsError) {}
+  if (!current) return;
   try {
     play({ _obj: "disableLayerStyle", _target: [TARGET_LAYER] });
   } catch (clearError) {}
@@ -3960,6 +3993,9 @@ function _collectDocumentFontData() {
       try {
         stroke = _getLayerStroke(i);
       } catch (strokeError) {}
+      // The other layer styles, kept as Photoshop gives them like a style
+      // made from the selected layer (app_src/labelplus/layerStyle.js)
+      const layerEffects = _readLayerEffects({ _ref: "layer", _index: i });
       let layerName = "";
       try {
         layerName = _getLayerPropertyByIndex("name", i) || "";
@@ -3970,6 +4006,7 @@ function _collectDocumentFontData() {
         typeUnit: textParams.typeUnit || "pixelsUnit",
         paragraphStyle,
         stroke,
+        layerEffects,
         runs,
       });
     } catch (layerError) {}

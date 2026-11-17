@@ -74,9 +74,19 @@ function resolveFolders() {
 
 const profileRoamingAppData = () => joinPath(os.homedir(), "AppData", "Roaming");
 
+// The development copy (npm run build:uxp:dev) keeps its own data, so that
+// it can run next to the installed plugin without writing over its storage
+const DEV_BUILD = typeof TYPER_DEV !== "undefined" && !!TYPER_DEV;
+const STORAGE_FOLDER = "LabelPlus-Nondum";
+const DEV_STORAGE_FOLDER = "LabelPlus-Nondum-Dev";
+
+function storageRootIn(folder) {
+  if (isWindows()) return joinPath(roamingAppData || profileRoamingAppData(), folder, "UXP");
+  return joinPath(os.homedir(), "Library", "Application Support", folder, "UXP");
+}
+
 function getStorageRoot() {
-  if (isWindows()) return joinPath(roamingAppData || profileRoamingAppData(), "LabelPlus-Nondum", "UXP");
-  return joinPath(os.homedir(), "Library", "Application Support", "LabelPlus-Nondum", "UXP");
+  return storageRootIn(DEV_BUILD ? DEV_STORAGE_FOLDER : STORAGE_FOLDER);
 }
 
 // Where Creative Cloud installs third-party plugins, and the file Photoshop
@@ -308,7 +318,9 @@ async function importCepStorage(root) {
     if (existing.includes(IMPORT_STAGING)) await removeTree(staging);
     return false;
   }
-  for (const cepRoot of await getCepStorageRoots()) {
+  // The development copy starts from a copy of the installed plugin's data
+  const sources = (DEV_BUILD ? [storageRootIn(STORAGE_FOLDER)] : []).concat(await getCepStorageRoots());
+  for (const cepRoot of sources) {
     const files = await loadMirror(cepRoot);
     if (!files.storage && !files.storage_profiles) continue;
     await removeTree(staging);

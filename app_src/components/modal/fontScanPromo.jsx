@@ -15,10 +15,7 @@ const FontScanPromo = React.memo(function FontScanPromo() {
     return (
         <div className="fsr-promo hostBgd">
             <div className="fsr-promo-text">
-                <b>
-                    {locale.fontScanTitle}
-                    <em className="fsr-promo-badge">{locale.settingsNewBadge}</em>
-                </b>
+                <b>{locale.fontScanTitle}</b>
                 <span>{locale.fontScanPromo}</span>
             </div>
             <button type="button" className="topcoat-button--large fsr-promo-btn" data-tour="font-scan-open" onClick={openFontScanR}>

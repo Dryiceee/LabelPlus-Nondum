@@ -10,7 +10,7 @@ import StylesBlock from "../stylesBlock/stylesBlock";
 import { DEFAULT_REPLACEMENTS, activeReplacements, addReplacements, clickRow, restoreDefaultReplacements } from "../../labelplus/importOptions";
 import { parseLpText } from "../../labelplus/lpParser";
 import { buildImportPlan, compareNames, detectImageFolder, isImageFile, matchImages, mergeGroupRules, OUTPUT_FOLDER_NAME } from "../../labelplus/importPlan";
-import { dirnameOf, groupIssues, joinPath, processPayload, readSidecar, runImport } from "../../labelplus/chapterRun";
+import { dirnameOf, groupIssues, joinPath, readSidecar, runImport } from "../../labelplus/chapterRun";
 import { openProject } from "../../pageNav/pageNav";
 
 const SETTINGS_KEY = "labelPlus";
@@ -305,22 +305,6 @@ const LabelPlusModal = React.memo(function LabelPlusModal({ front = true }) {
     }
   };
 
-  // The open document: to try the settings on one page. Nothing is saved.
-  const processActive = async () => {
-    startRun();
-    const sidecar = outputFolder ? await readSidecar(host, outputFolder) : null;
-    const active = sidecar ? await callHost("lpActiveDocumentName") : null;
-    const page = active && active.ok ? sidecar.pages[active.name] : null;
-    const result = await callHost("lpProcessPage", Object.assign({ path: "" }, processPayload(page, usedRules, context.state.styles, { applyStyle: true, center: true })));
-    finishRun({
-      title: result.ok ? locale.lpProcessDone.replace("{done}", 1).replace("{total}", 1) : locale.lpProcessFailed,
-      cancelled: false,
-      issues: result.ok ? result.issues : [{ code: result.code, message: result.message }],
-      stats: result.ok ? statsText(result) : "",
-      trace: result.trace || [],
-    });
-  };
-
   const found = matches.filter((match) => match.file).length;
   const canImport = !running && plan && plan.pages.length > 0 && !!sourceFolder && !!outputFolder;
 
@@ -456,7 +440,6 @@ const LabelPlusModal = React.memo(function LabelPlusModal({ front = true }) {
                     {locale.lpImportButton.replace("{count}", plan ? plan.pages.length : 0)}
                   </button>
                   <button type="button" className="topcoat-button--large--cta" disabled={!canImport} onClick={() => doRun(true)}>{locale.lpProcessButton}</button>
-                  <button type="button" className="topcoat-button--large" disabled={running} onClick={processActive}>{locale.lpProcessActive}</button>
                 </div>
               </section>
             </React.Fragment>

@@ -33,6 +33,8 @@ const load = require('./helpers/loadAppModule')({
     getUserFonts: () => [], scanPsdFonts: (file, callback) => scans.push({ file, callback }),
   },
   '../../context': { useContext: () => context },
+  '../../fontLocalNames': { getChineseFontNames: () => Promise.resolve({}) },
+  '../../interfaceLanguage': { getInterfaceLanguage: () => 'en_US' },
   '../../useFontFinderMatches': () => ({ available: false, entries: {}, busy: false, install() {}, foundKeys: [], isUnmatched: () => false }),
   './fontFinderSuggestion': { FontFinderBanner: () => null, FontFinderSuggestion: () => null, FontWebSearchButton: () => null },
 });

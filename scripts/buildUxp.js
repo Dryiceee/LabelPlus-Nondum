@@ -11,7 +11,14 @@ const { zipSync, unzipSync } = require("fflate");
 const root = path.resolve(__dirname, "..");
 const addonBuild = process.argv.includes("--addon");
 const macBuild = process.argv.includes("--mac");
-const out = path.join(root, macBuild ? "uxp-mac" : addonBuild ? "uxp-addon" : "uxp");
+const devBuild = process.argv.includes("--dev");
+const out = path.join(root, macBuild ? "uxp-mac" : addonBuild ? "uxp-addon" : devBuild ? "uxp-dev" : "uxp");
+// The development copy is a plugin of its own: another ID and name, so that
+// Photoshop loads it next to the installed LabelPlus-Nondum. Its storage
+// folder and update switch follow TYPER_DEV (uxp-src/host/files.js,
+// uxp-src/web/entry.js). scripts/packageRelease.js refuses this ID.
+const DEV_ID_SUFFIX = ".dev";
+const DEV_NAME = "LabelPlus-Nondum DEV";
 const pkg = require(path.join(root, "package.json"));
 const nativeSource = path.join(root, "uxp-src/native/typer-keys.m");
 const nativePacked = path.join(root, "uxp-src/native/typer-keys.json");
@@ -71,8 +78,13 @@ function writeManifest() {
     manifest.name = 'TypeR DEBUG';
     manifest.entrypoints.forEach(entry => { if (entry.id === 'typer') entry.label = { default: 'TypeR DEBUG' }; });
   }
-  // Development builds evaluate test code (uxp-src/host/devChannel.js)
-  if (process.argv.includes("--dev")) manifest.requiredPermissions.allowCodeGenerationFromStrings = true;
+  if (devBuild) {
+    manifest.id += DEV_ID_SUFFIX;
+    manifest.name = DEV_NAME;
+    manifest.entrypoints.forEach(entry => { if (entry.id === 'typer') entry.label = { default: DEV_NAME }; });
+    // Development builds evaluate test code (uxp-src/host/devChannel.js)
+    manifest.requiredPermissions.allowCodeGenerationFromStrings = true;
+  }
   fs.writeFileSync(path.join(out, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   return manifest;
 }
@@ -129,7 +141,7 @@ function packageCcx(manifest) {
 }
 
 if (!fs.existsSync(path.join(out, "host.js")) || !fs.existsSync(path.join(out, "web/index.js"))) {
-  throw new Error("Run webpack with webpack.uxp.config.js first");
+  throw new Error("Run webpack with webpack.uxp.config.js first" + (devBuild ? " (with --env dev)" : ""));
 }
 const diagnosticBuild = process.argv.includes('--diagnostic');
 if (macBuild && addonBuild) throw new Error('Choose either macOS or Windows addon packaging');

@@ -5,14 +5,14 @@ import React from "react";
 import deepClone from "../../deepClone";
 import PropTypes from "prop-types";
 import { FiArrowRightCircle, FiPlus, FiFolderPlus, FiLayers, FiChevronDown, FiChevronUp, FiCopy, FiClipboard, FiTrash2, FiPlusSquare, FiEye, FiEyeOff, FiMinus, FiInfo, FiX } from "react-icons/fi";
-import { MdEdit, MdLock } from "react-icons/md";
+import { MdEdit, MdLock, MdLockOpen } from "react-icons/md";
 import { CiExport } from "react-icons/ci";
 
 import config from "../../config";
 import { locale, nativeAlert, nativeConfirm, getActiveLayerText, setActiveLayerText, rgbToHex, getStyleObject, getUserFonts, refreshUserFonts } from "../../utils";
 import { useContext } from "../../context";
 import ExportFolderDialog from "../modal/exportFolderDialog";
-import { buildFolderTree } from "../../folderUtils";
+import { buildFolderTree, collectDescendantIds } from "../../folderUtils";
 import { collectFontRefs, exportZipWithFonts } from "../../fontFileExport";
 import { createFontPreviewRegistry, getFontPreviewFamily } from "../../fontPreview";
 import { notePerfRender } from "../../perfDebug";
@@ -31,6 +31,7 @@ const StylesBlock = React.memo(function StylesBlock() {
     currentStyle: state.currentStyle,
     showTips: state.showTips,
     openFolders: state.openFolders,
+    lockedFolders: state.lockedFolders,
     currentStyleId: state.currentStyleId,
     direction: state.direction,
     showQuickStyleSize: state.showQuickStyleSize,
@@ -42,8 +43,13 @@ const StylesBlock = React.memo(function StylesBlock() {
     [context.state.styles]
   );
   const [installedFonts, setInstalledFonts] = React.useState(getUserFonts);
-  const [copiedStyle, setCopiedStyle] = React.useState(null);
+  // Copied styles: one or several, pasted together
+  const [copiedStyles, setCopiedStyles] = React.useState([]);
   const [styleContextMenu, setStyleContextMenu] = React.useState(null);
+  // Several styles chosen with Ctrl+click (one more or less) and Shift+click
+  // (a run of one folder), to move, copy or delete together. A plain click
+  // chooses one style again.
+  const [selection, setSelection] = React.useState({ ids: [], anchor: null });
 
   const closeStyleContextMenu = React.useCallback(() => {
     setStyleContextMenu(null);
@@ -52,7 +58,12 @@ const StylesBlock = React.memo(function StylesBlock() {
   const openStyleContextMenu = React.useCallback((e, style) => {
     e.preventDefault();
     e.stopPropagation();
-    context.dispatch({ type: "setCurrentStyleId", id: style.id });
+    // A right click on one of several chosen styles keeps them
+    const keep = selectionRef.current.ids.length > 1 && selectionRef.current.ids.includes(style.id);
+    if (!keep) {
+      setSelection({ ids: [style.id], anchor: style.id });
+      context.dispatch({ type: "setCurrentStyleId", id: style.id });
+    }
     setStyleContextMenu({ type: "style", style, folderId: style.folder || null, x: e.clientX, y: e.clientY });
   }, [context.dispatch]);
 
@@ -81,37 +92,6 @@ const StylesBlock = React.memo(function StylesBlock() {
     };
   }, [styleContextMenu, closeStyleContextMenu]);
 
-  const copyContextStyle = React.useCallback(() => {
-    if (!styleContextMenu?.style) return;
-    setCopiedStyle(deepClone(styleContextMenu.style));
-    closeStyleContextMenu();
-  }, [styleContextMenu, closeStyleContextMenu]);
-
-  const pasteContextStyle = React.useCallback(() => {
-    if (!copiedStyle || !styleContextMenu) return;
-    context.dispatch({
-      type: "duplicateStyle",
-      data: deepClone(copiedStyle),
-      folderId: styleContextMenu.folderId,
-    });
-    closeStyleContextMenu();
-  }, [copiedStyle, styleContextMenu, context.dispatch, closeStyleContextMenu]);
-
-  const duplicateContextStyle = React.useCallback(() => {
-    if (!styleContextMenu?.style) return;
-    context.dispatch({ type: "duplicateStyle", data: styleContextMenu.style });
-    closeStyleContextMenu();
-  }, [styleContextMenu, context.dispatch, closeStyleContextMenu]);
-
-  const deleteContextStyle = React.useCallback(() => {
-    const styleId = styleContextMenu?.style?.id;
-    if (!styleId) return;
-    closeStyleContextMenu();
-    nativeConfirm(locale.confirmDeleteStyle, locale.confirmTitle, (ok) => {
-      if (ok) context.dispatch({ type: "deleteStyle", id: styleId });
-    });
-  }, [styleContextMenu, context.dispatch, closeStyleContextMenu]);
-
   // A new style from the selected text layer, refused when its text mixes looks
   const addStyleFromLayer = React.useCallback(() => {
     getActiveLayerText((data) => {
@@ -135,11 +115,6 @@ const StylesBlock = React.memo(function StylesBlock() {
     context.dispatch({ type: "setModal", modal: "editStyle", data: { create: true, folder: styleContextMenu?.folderId || "" } });
     closeStyleContextMenu();
   }, [styleContextMenu, context.dispatch, closeStyleContextMenu]);
-
-  const addContextFolder = React.useCallback(() => {
-    context.dispatch({ type: "setModal", modal: "editFolder", data: { create: true } });
-    closeStyleContextMenu();
-  }, [context.dispatch, closeStyleContextMenu]);
 
   // Fonts are fetched once at panel startup: enumerating app.fonts blocks
   // Photoshop, and refreshing on focus used to swallow clicks on style items
@@ -170,6 +145,148 @@ const StylesBlock = React.memo(function StylesBlock() {
     return map;
   }, [context.state.styles]);
   const unsortedStyles = stylesByFolder.get("__unsorted__") || [];
+
+  // Chosen styles that still exist, in the order of the list
+  const selectedIds = React.useMemo(() => {
+    if (selection.ids.length < 2) return [];
+    const chosen = new Set(selection.ids);
+    return (context.state.styles || []).filter((style) => chosen.has(style.id)).map((style) => style.id);
+  }, [selection.ids, context.state.styles]);
+  const selectionRef = React.useRef(selection);
+  selectionRef.current = selection;
+  const selectedIdsRef = React.useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const stylesByFolderRef = React.useRef(stylesByFolder);
+  stylesByFolderRef.current = stylesByFolder;
+  const currentStyleIdRef = React.useRef(context.state.currentStyleId);
+  currentStyleIdRef.current = context.state.currentStyleId;
+
+  // Identity-stable, so that the style items only re-render for `selected`
+  const selectStyle = React.useCallback((e, style) => {
+    const current = selectionRef.current;
+    if (e.ctrlKey || e.metaKey) {
+      const base = current.ids.length ? current.ids : (currentStyleIdRef.current ? [currentStyleIdRef.current] : []);
+      const ids = base.includes(style.id) ? base.filter((id) => id !== style.id) : base.concat(style.id);
+      setSelection({ ids, anchor: style.id });
+      return;
+    }
+    if (e.shiftKey) {
+      const anchor = current.anchor || currentStyleIdRef.current;
+      const list = (stylesByFolderRef.current.get(style.folder || "__unsorted__") || []).map((item) => item.id);
+      const from = list.indexOf(anchor);
+      const to = list.indexOf(style.id);
+      if (from !== -1 && to !== -1) {
+        setSelection({ ids: list.slice(Math.min(from, to), Math.max(from, to) + 1), anchor });
+        return;
+      }
+    }
+    setSelection({ ids: [style.id], anchor: style.id });
+    context.dispatch({ type: "setCurrentStyleId", id: style.id });
+  }, [context.dispatch]);
+
+  // What a drag of this style carries: the chosen styles when it is one of them
+  const dragStyleIds = React.useCallback((styleId) => {
+    const ids = selectedIdsRef.current;
+    return ids.length > 1 && ids.includes(styleId) ? ids : [styleId];
+  }, []);
+
+  const styleSelection = React.useMemo(
+    () => ({ ids: new Set(selectedIds), onSelect: selectStyle, dragIds: dragStyleIds }),
+    [selectedIds, selectStyle, dragStyleIds]
+  );
+
+  React.useEffect(() => {
+    if (selection.ids.length < 2) return undefined;
+    const clearOnEscape = (e) => {
+      if (e.key === "Escape") setSelection({ ids: [], anchor: null });
+    };
+    document.addEventListener("keydown", clearOnEscape);
+    return () => document.removeEventListener("keydown", clearOnEscape);
+  }, [selection.ids.length]);
+
+  // The styles a style menu acts on: the chosen ones when it opened on one of them
+  const menuStyles = React.useMemo(() => {
+    const style = styleContextMenu?.style;
+    if (!style) return [];
+    if (selectedIds.length > 1 && selectedIds.includes(style.id)) {
+      const chosen = new Set(selectedIds);
+      return (context.state.styles || []).filter((item) => chosen.has(item.id));
+    }
+    return [style];
+  }, [styleContextMenu, selectedIds, context.state.styles]);
+  const menuCount = menuStyles.length;
+
+  const copyContextStyle = React.useCallback(() => {
+    if (!styleContextMenu?.style) return;
+    setCopiedStyles(menuStyles.map((style) => deepClone(style)));
+    closeStyleContextMenu();
+  }, [styleContextMenu, menuStyles, closeStyleContextMenu]);
+
+  const pasteContextStyle = React.useCallback(() => {
+    if (!copiedStyles.length || !styleContextMenu) return;
+    copiedStyles.forEach((style) => {
+      context.dispatch({
+        type: "duplicateStyle",
+        data: deepClone(style),
+        folderId: styleContextMenu.folderId,
+      });
+    });
+    closeStyleContextMenu();
+  }, [copiedStyles, styleContextMenu, context.dispatch, closeStyleContextMenu]);
+
+  const duplicateContextStyle = React.useCallback(() => {
+    if (!styleContextMenu?.style) return;
+    context.dispatch({ type: "duplicateStyle", data: styleContextMenu.style });
+    closeStyleContextMenu();
+  }, [styleContextMenu, context.dispatch, closeStyleContextMenu]);
+
+  const deleteContextStyle = React.useCallback(() => {
+    const styleId = styleContextMenu?.style?.id;
+    if (!styleId) return;
+    const ids = menuStyles.map((style) => style.id);
+    closeStyleContextMenu();
+    if (ids.length > 1) {
+      nativeConfirm(String(locale.confirmDeleteStyles || "Delete the {count} selected styles?").replace("{count}", ids.length), locale.confirmTitle, (ok) => {
+        if (!ok) return;
+        context.dispatch({ type: "deleteStyles", ids });
+        setSelection({ ids: [], anchor: null });
+      });
+      return;
+    }
+    nativeConfirm(locale.confirmDeleteStyle, locale.confirmTitle, (ok) => {
+      if (ok) context.dispatch({ type: "deleteStyle", id: styleId });
+    });
+  }, [styleContextMenu, menuStyles, context.dispatch, closeStyleContextMenu]);
+
+  const lockedFolders = context.state.lockedFolders || [];
+  const menuLocked = !!styleContextMenu && lockedFolders.includes(styleContextMenu.folderId || "unsorted");
+  // A folder holding a locked subfolder cannot be deleted either
+  const menuFolderDeletable = !!styleContextMenu?.folderId &&
+    ![styleContextMenu.folderId].concat(collectDescendantIds(context.state.folders, styleContextMenu.folderId))
+      .some((id) => lockedFolders.includes(id));
+
+  const toggleContextFolderLock = React.useCallback(() => {
+    if (!styleContextMenu) return;
+    context.dispatch({ type: "toggleFolderLock", id: styleContextMenu.folderId || "unsorted" });
+    closeStyleContextMenu();
+  }, [styleContextMenu, context.dispatch, closeStyleContextMenu]);
+
+  // Shift+click deletes the styles too, like the button in the folder editor
+  const deleteContextFolder = React.useCallback((e) => {
+    const folderId = styleContextMenu?.folderId;
+    if (!folderId) return;
+    const permanent = e.shiftKey;
+    closeStyleContextMenu();
+    const confirmText = permanent ? locale.confirmDeleteFolderPermanent : (locale.confirmDeleteFolderWithChildren || locale.confirmDeleteFolder);
+    nativeConfirm(confirmText, locale.confirmTitle, (ok) => {
+      if (ok) context.dispatch({ type: "deleteFolder", id: folderId, permanent });
+    });
+  }, [styleContextMenu, context.dispatch, closeStyleContextMenu]);
+
+  const addContextFolder = React.useCallback(() => {
+    context.dispatch({ type: "setModal", modal: "editFolder", data: { create: true } });
+    closeStyleContextMenu();
+  }, [context.dispatch, closeStyleContextMenu]);
   const folderTree = React.useMemo(() => buildFolderTree(context.state.folders), [context.state.folders]);
   const foldersById = React.useMemo(
     () => new Map((context.state.folders || []).map((folder) => [folder.id, folder])),
@@ -219,6 +336,8 @@ const StylesBlock = React.memo(function StylesBlock() {
                 stylesByFolder={stylesByFolder}
                 dispatch={context.dispatch}
                 openFolders={context.state.openFolders}
+                lockedFolders={lockedFolders}
+                selection={styleSelection}
                 branchActiveStyleId={
                   currentStyleFolderId === null ? context.state.currentStyleId : null
                 }
@@ -237,6 +356,8 @@ const StylesBlock = React.memo(function StylesBlock() {
               stylesByFolder={stylesByFolder}
               dispatch={context.dispatch}
               openFolders={context.state.openFolders}
+              lockedFolders={lockedFolders}
+              selection={styleSelection}
               currentStyleId={context.state.currentStyleId}
               currentStylePath={currentStylePath}
               direction={context.state.direction}
@@ -258,7 +379,7 @@ const StylesBlock = React.memo(function StylesBlock() {
           role="menu"
           style={{
             left: Math.max(4, Math.min(styleContextMenu.x, window.innerWidth - 196)),
-            top: Math.max(4, Math.min(styleContextMenu.y, window.innerHeight - (styleContextMenu.type === "style" ? 216 : 116))),
+            top: Math.max(4, Math.min(styleContextMenu.y, window.innerHeight - (styleContextMenu.type === "style" ? 216 : 196))),
           }}
           onMouseDown={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
@@ -266,23 +387,23 @@ const StylesBlock = React.memo(function StylesBlock() {
           {styleContextMenu.type === "style" && (
             <button type="button" role="menuitem" onClick={copyContextStyle}>
               <FiCopy size={15} />
-              <span>{locale.copyStyle}</span>
+              <span>{menuCount > 1 ? String(locale.copyStyles || "Copy {count} styles").replace("{count}", menuCount) : locale.copyStyle}</span>
             </button>
           )}
-          <button type="button" role="menuitem" onClick={pasteContextStyle} disabled={!copiedStyle}>
+          <button type="button" role="menuitem" onClick={pasteContextStyle} disabled={!copiedStyles.length || menuLocked}>
             <FiClipboard size={15} />
-            <span>{locale.pasteStyle}</span>
+            <span>{copiedStyles.length > 1 ? String(locale.pasteStyles || "Paste {count} styles").replace("{count}", copiedStyles.length) : locale.pasteStyle}</span>
           </button>
           {styleContextMenu.type === "style" && (
             <React.Fragment>
-              <button type="button" role="menuitem" data-tour="duplicate-style" onClick={duplicateContextStyle}>
+              <button type="button" role="menuitem" data-tour="duplicate-style" onClick={duplicateContextStyle} disabled={menuLocked || menuCount > 1}>
                 <FiPlusSquare size={15} />
                 <span>{locale.duplicateStyle}</span>
               </button>
             </React.Fragment>
           )}
           <div className="style-context-menu-separator hostBrdTopContrast" />
-          <button type="button" role="menuitem" onClick={addContextStyle}>
+          <button type="button" role="menuitem" onClick={addContextStyle} disabled={menuLocked}>
             <FiPlus size={15} />
             <span>{locale.addStyle}</span>
           </button>
@@ -293,10 +414,25 @@ const StylesBlock = React.memo(function StylesBlock() {
           {styleContextMenu.type === "style" && (
             <React.Fragment>
               <div className="style-context-menu-separator hostBrdTopContrast" />
-              <button type="button" role="menuitem" className="m-danger" onClick={deleteContextStyle}>
+              <button type="button" role="menuitem" className="m-danger" onClick={deleteContextStyle} disabled={menuLocked}>
                 <FiTrash2 size={15} />
-                <span>{locale.delete}</span>
+                <span>{menuCount > 1 ? String(locale.deleteStyles || "Delete {count} styles").replace("{count}", menuCount) : locale.delete}</span>
               </button>
+            </React.Fragment>
+          )}
+          {styleContextMenu.type === "folder" && (
+            <React.Fragment>
+              <div className="style-context-menu-separator hostBrdTopContrast" />
+              <button type="button" role="menuitem" onClick={toggleContextFolderLock}>
+                {menuLocked ? <MdLockOpen size={15} /> : <MdLock size={15} />}
+                <span>{menuLocked ? locale.unlockFolder : locale.lockFolder}</span>
+              </button>
+              {!!styleContextMenu.folderId && (
+                <button type="button" role="menuitem" className="m-danger" onClick={deleteContextFolder} disabled={!menuFolderDeletable}>
+                  <FiTrash2 size={15} />
+                  <span>{locale.deleteFolderMenu}</span>
+                </button>
+              )}
             </React.Fragment>
           )}
         </div>
@@ -318,6 +454,8 @@ const StylesBlock = React.memo(function StylesBlock() {
 
 const styleDragMime = "application/x-typer-style-id";
 let currentDraggingStyleId = null;
+// Every style of the drag: several when it started on one of the chosen styles
+let currentDraggingStyleIds = [];
 const folderDragMime = "application/x-typer-folder-id";
 let currentDraggingFolder = null;
 
@@ -328,6 +466,12 @@ const hasStyleDragData = (event) => {
 
 const getDraggedStyleId = (event) => {
   return currentDraggingStyleId || event.dataTransfer.getData(styleDragMime) || event.dataTransfer.getData("text/plain");
+};
+
+const getDraggedStyleIds = (event) => {
+  if (currentDraggingStyleIds.length) return currentDraggingStyleIds;
+  const id = getDraggedStyleId(event);
+  return id ? [id] : [];
 };
 
 const getStyleDropLocation = (event) => {
@@ -372,6 +516,8 @@ const FolderTree = React.memo(function FolderTree(props) {
           stylesByFolder={props.stylesByFolder}
           dispatch={props.dispatch}
           openFolders={props.openFolders}
+          lockedFolders={props.lockedFolders}
+          selection={props.selection}
           branchActiveStyleId={props.currentStylePath.has(folder.id) ? props.currentStyleId : null}
           currentStylePath={
             props.currentStylePath.has(folder.id) ? props.currentStylePath : emptyIdSet
@@ -395,6 +541,8 @@ FolderTree.propTypes = {
   stylesByFolder: PropTypes.object.isRequired,
   dispatch: PropTypes.func.isRequired,
   openFolders: PropTypes.array.isRequired,
+  lockedFolders: PropTypes.array.isRequired,
+  selection: PropTypes.object.isRequired,
   currentStyleId: PropTypes.string,
   currentStylePath: PropTypes.object.isRequired,
   direction: PropTypes.string,
@@ -405,6 +553,7 @@ FolderTree.propTypes = {
 };
 
 const FolderItem = React.memo(function FolderItem(props) {
+  const locked = props.lockedFolders.includes(props.data.id || "unsorted");
   const [dropActive, setDropActive] = React.useState(false);
   const [styleDropTarget, setStyleDropTarget] = React.useState(null);
   const [folderDropEdge, setFolderDropEdge] = React.useState(null);
@@ -424,13 +573,13 @@ const FolderItem = React.memo(function FolderItem(props) {
       setFolderDropEdge(e.clientY < rect.top + rect.height / 2 ? "before" : "after");
       return;
     }
-    if (!hasStyleDragData(e)) return;
+    if (locked || !hasStyleDragData(e)) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
     setDropActive(true);
     setStyleDropTarget(null);
-  }, [props.data.id, props.parentId]);
+  }, [props.data.id, props.parentId, locked]);
 
   const handleDragLeave = React.useCallback((e) => {
     if (e.currentTarget.contains(e.relatedTarget)) return;
@@ -451,15 +600,16 @@ const FolderItem = React.memo(function FolderItem(props) {
       props.dispatch({ type: "reorderFolders", parentId: props.parentId, order });
       return;
     }
-    if (!hasStyleDragData(e)) return;
+    if (locked || !hasStyleDragData(e)) return;
     e.preventDefault();
     e.stopPropagation();
     setDropActive(false);
     setStyleDropTarget(null);
-    const styleId = getDraggedStyleId(e);
-    if (!styleId) return;
-    props.dispatch({ type: "moveStyleToFolder", id: styleId, folderId: props.data.id || null });
-  }, [props.dispatch, props.data.id, props.parentId, props.siblingFolderIds, folderDropEdge]);
+    const styleIds = getDraggedStyleIds(e);
+    if (!styleIds.length) return;
+    if (styleIds.length > 1) props.dispatch({ type: "moveStylesToFolder", ids: styleIds, folderId: props.data.id || null });
+    else props.dispatch({ type: "moveStyleToFolder", id: styleIds[0], folderId: props.data.id || null });
+  }, [props.dispatch, props.data.id, props.parentId, props.siblingFolderIds, folderDropEdge, locked]);
 
   const startFolderDrag = React.useCallback((e) => {
     if (!props.data.id) return;
@@ -489,7 +639,7 @@ const FolderItem = React.memo(function FolderItem(props) {
   );
 
   const handleStyleItemDragOver = React.useCallback((e, targetStyleId) => {
-    if (!hasStyleDragData(e)) return;
+    if (locked || !hasStyleDragData(e)) return;
     const draggedStyleId = getDraggedStyleId(e);
     if (!draggedStyleId) return;
     e.preventDefault();
@@ -502,11 +652,25 @@ const FolderItem = React.memo(function FolderItem(props) {
     }
     const location = getStyleDropLocation(e);
     setStyleDropTarget({ id: targetStyleId, ...location });
-  }, []);
+  }, [locked]);
 
   const handleStyleItemDrop = React.useCallback(
     (e, targetStyleId) => {
-      if (!hasStyleDragData(e)) return;
+      if (locked || !hasStyleDragData(e)) return;
+      const draggedStyleIds = getDraggedStyleIds(e);
+      if (draggedStyleIds.length > 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        setDropActive(false);
+        setStyleDropTarget(null);
+        if (draggedStyleIds.includes(targetStyleId)) return;
+        const { position } = getStyleDropLocation(e);
+        const order = styles.map((style) => style.id).filter((id) => !draggedStyleIds.includes(id));
+        const targetIndex = order.indexOf(targetStyleId);
+        order.splice(position === "before" ? targetIndex : targetIndex + 1, 0, ...draggedStyleIds);
+        props.dispatch({ type: "moveStylesToFolder", ids: draggedStyleIds, folderId: props.data.id || null, order });
+        return;
+      }
       const draggedStyleId = getDraggedStyleId(e);
       if (!draggedStyleId) return;
       e.preventDefault();
@@ -526,7 +690,7 @@ const FolderItem = React.memo(function FolderItem(props) {
         order: getStyleOrder(draggedStyleId, targetStyleId, position),
       });
     },
-    [props.dispatch, getStyleOrder, props.data.id]
+    [props.dispatch, getStyleOrder, props.data.id, locked, styles]
   );
 
   const clearStyleDropTarget = React.useCallback((e) => {
@@ -587,6 +751,11 @@ const FolderItem = React.memo(function FolderItem(props) {
     props.dispatch({ type: "toggleFolder", id: props.data.id });
   }, [props.dispatch, props.data.id]);
 
+  const toggleLock = React.useCallback((e) => {
+    e.stopPropagation();
+    props.dispatch({ type: "toggleFolderLock", id: props.data.id || "unsorted" });
+  }, [props.dispatch, props.data.id]);
+
   const isOpen = props.data.id
     ? props.openFolders.includes(props.data.id)
     : props.openFolders.includes("unsorted");
@@ -600,6 +769,7 @@ const FolderItem = React.memo(function FolderItem(props) {
         (isOpen ? " m-open" : "") +
         (props.depth ? " m-nested" : "") +
         (dropActive ? " m-drop-active" : "") +
+        (locked ? " m-locked" : "") +
         (folderDropEdge ? " m-folder-drop-" + folderDropEdge : "")
       }
       onDragOver={handleDragOver}
@@ -611,7 +781,7 @@ const FolderItem = React.memo(function FolderItem(props) {
         className="folder-header"
         style={{ paddingLeft: props.depth ? props.depth * 12 + 4 : 4 }}
         onClick={toggleFolder}
-        draggable={!!props.data.id}
+        draggable={!!props.data.id && !locked}
         onDragStart={startFolderDrag}
         onDragEnd={endFolderDrag}
       >
@@ -621,24 +791,34 @@ const FolderItem = React.memo(function FolderItem(props) {
           <em className="folder-styles-count">({styles.length})</em>
         </div>
         <div className="folder-actions">
-          {props.data.id ? (
+          {!!props.data.id && (
             <>
-              <button className="topcoat-icon-button--large--quiet" title={locale.addSubfolder || "Add subfolder"} onClick={addSubfolder}>
-                <FiFolderPlus size={14} />
-              </button>
+              {!locked && (
+                <button className="topcoat-icon-button--large--quiet" title={locale.addSubfolder || "Add subfolder"} onClick={addSubfolder}>
+                  <FiFolderPlus size={14} />
+                </button>
+              )}
               <button className="topcoat-icon-button--large--quiet" title={locale.exportFolder} onClick={openExportDialog}>
                 <CiExport size={14} />
               </button>
-              <button className="topcoat-icon-button--large--quiet" title={locale.editFolder} onClick={openFolder}>
-                <MdEdit size={14} />
-              </button>
+              {!locked && (
+                <button className="topcoat-icon-button--large--quiet" title={locale.editFolder} onClick={openFolder}>
+                  <MdEdit size={14} />
+                </button>
+              )}
               <button className="topcoat-icon-button--large--quiet" title={locale.duplicateFolder} onClick={duplicateFolder}>
                 <FiCopy size={14} />
               </button>
             </>
-          ) : (
-            <MdLock size={18} className="folder-locked" />
           )}
+          <button
+            className={"topcoat-icon-button--large--quiet folder-lock" + (locked ? " m-locked" : "")}
+            title={locked ? locale.unlockFolder : locale.lockFolder}
+            aria-pressed={locked}
+            onClick={toggleLock}
+          >
+            {locked ? <MdLock size={14} /> : <MdLockOpen size={14} />}
+          </button>
         </div>
       </div>
       {exportDialogOpen && (
@@ -655,6 +835,8 @@ const FolderItem = React.memo(function FolderItem(props) {
                 stylesByFolder={props.stylesByFolder}
                 dispatch={props.dispatch}
                 openFolders={props.openFolders}
+                lockedFolders={props.lockedFolders}
+                selection={props.selection}
                 currentStyleId={props.branchActiveStyleId}
                 currentStylePath={props.currentStylePath}
                 direction={props.direction}
@@ -676,6 +858,10 @@ const FolderItem = React.memo(function FolderItem(props) {
                   onDropStyle={handleStyleItemDrop}
                   onDragLeaveStyle={clearStyleDropTarget}
                   style={style}
+                  locked={locked}
+                  selected={props.selection.ids.has(style.id)}
+                  onSelect={props.selection.onSelect}
+                  dragIds={props.selection.dragIds}
                   dispatch={props.dispatch}
                   direction={props.direction}
                   showQuickStyleSize={props.showQuickStyleSize}
@@ -701,6 +887,8 @@ FolderItem.propTypes = {
   stylesByFolder: PropTypes.object.isRequired,
   dispatch: PropTypes.func.isRequired,
   openFolders: PropTypes.array.isRequired,
+  lockedFolders: PropTypes.array.isRequired,
+  selection: PropTypes.object.isRequired,
   branchActiveStyleId: PropTypes.string,
   currentStylePath: PropTypes.object.isRequired,
   direction: PropTypes.string,
@@ -740,9 +928,14 @@ const StyleItem = React.memo(function StyleItem(props) {
   }, []);
 
   // StyleItem now handles its own select/open dispatch instead of receiving closures as props
-  const selectStyle = React.useCallback(() => {
-    dispatch({ type: "setCurrentStyleId", id: props.style.id });
-  }, [dispatch, props.style.id]);
+  const selectStyle = React.useCallback((e) => {
+    props.onSelect(e, props.style);
+  }, [props.onSelect, props.style]);
+
+  // Shift+click would select the text of the list
+  const preventTextSelection = React.useCallback((e) => {
+    if (e.shiftKey) e.preventDefault();
+  }, []);
 
   const openStyle = React.useCallback((e) => {
     e.stopPropagation();
@@ -817,6 +1010,7 @@ const StyleItem = React.memo(function StyleItem(props) {
   };
   const startDrag = React.useCallback((e) => {
     currentDraggingStyleId = props.style.id;
+    currentDraggingStyleIds = props.dragIds(props.style.id);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData(styleDragMime, props.style.id);
     e.dataTransfer.setData("text/plain", props.style.id);
@@ -826,7 +1020,7 @@ const StyleItem = React.memo(function StyleItem(props) {
     color.className = "style-drag-preview-color";
     color.style.background = rgbToHex(textStyle.color);
     const name = document.createElement("span");
-    name.textContent = props.style.name;
+    name.textContent = props.style.name + (currentDraggingStyleIds.length > 1 ? "  +" + (currentDraggingStyleIds.length - 1) : "");
     preview.appendChild(color);
     preview.appendChild(name);
     document.body.appendChild(preview);
@@ -834,10 +1028,11 @@ const StyleItem = React.memo(function StyleItem(props) {
     window.setTimeout(() => {
       if (preview.parentNode) preview.parentNode.removeChild(preview);
     }, 0);
-  }, [props.style.id, props.style.name, textStyle.color]);
+  }, [props.style.id, props.style.name, props.dragIds, textStyle.color]);
 
   const endDrag = React.useCallback(() => {
     currentDraggingStyleId = null;
+    currentDraggingStyleIds = [];
   }, []);
 
   const dragOverStyle = React.useCallback(
@@ -861,16 +1056,18 @@ const StyleItem = React.memo(function StyleItem(props) {
       className={
         "style-item hostBgdLight" +
         (props.active ? " m-current" : "") +
+        (props.selected ? " m-selected" : "") +
         (props.style.prefixesDisabled ? " m-disabled" : "") +
         (props.dropEdge ? " m-drop-" + props.dropEdge : "")
       }
-      draggable
+      draggable={!props.locked}
       onDragStart={startDrag}
       onDragEnd={endDrag}
       onDragOver={dragOverStyle}
       onDragLeave={props.onDragLeaveStyle}
       onDrop={dropStyle}
       onClick={selectStyle}
+      onMouseDown={preventTextSelection}
       onContextMenu={(e) => props.onOpenContextMenu(e, props.style)}
     >
       {props.dropEdge && <span className={"style-drop-indicator m-" + props.dropEdge} aria-hidden="true" />}
@@ -912,7 +1109,7 @@ const StyleItem = React.memo(function StyleItem(props) {
             ))}
           </div>
         )}
-        {showQuickStyleSize ? (
+        {props.locked ? null : showQuickStyleSize ? (
           <div
             className={"style-quick-size-wrap" + (quickOpen ? " m-open" : "")}
             ref={quickWrapRef}
@@ -959,6 +1156,10 @@ const StyleItem = React.memo(function StyleItem(props) {
 StyleItem.propTypes = {
   style: PropTypes.object.isRequired,
   active: PropTypes.bool,
+  locked: PropTypes.bool,
+  selected: PropTypes.bool,
+  onSelect: PropTypes.func.isRequired,
+  dragIds: PropTypes.func.isRequired,
   dropEdge: PropTypes.oneOf(["top", "right", "bottom", "left"]),
   onDragOverStyle: PropTypes.func.isRequired,
   onDropStyle: PropTypes.func.isRequired,

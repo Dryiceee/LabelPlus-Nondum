@@ -690,8 +690,11 @@ async function startOnce() {
     document.theme.onUpdated.addListener(onThemeChanged);
   } catch (error) {}
   keysHelper.start((line) => post({ type: "watcherLine", line })).catch((error) => console.error("TypeR keys", error));
-  services.removeStalePluginFolders().catch((error) => console.error("TypeR: plugin cleanup", error));
-  services.removeUpdateFolder().catch((error) => console.error("TypeR: update cleanup", error));
+  // The development copy leaves the installed plugin's folders alone
+  if (typeof TYPER_DEV === "undefined" || !TYPER_DEV) {
+    services.removeStalePluginFolders().catch((error) => console.error("TypeR: plugin cleanup", error));
+    services.removeUpdateFolder().catch((error) => console.error("TypeR: update cleanup", error));
+  }
 }
 
 const devResultListeners = [];

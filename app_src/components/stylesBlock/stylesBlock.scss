@@ -148,9 +148,14 @@
     padding: 0;
   }
 }
-.folder-locked {
-  height: 18px;
-  opacity: 0.3;
+.folder-lock {
+  opacity: 0.35;
+  &.m-locked {
+    opacity: 0.85;
+  }
+  &:hover {
+    opacity: 1;
+  }
 }
 .folder-content {
   display: flex;
@@ -202,6 +207,10 @@
   }
   .light-theme &:hover {
     outline: 1px solid rgba(#000, 0.3);
+  }
+  &.m-selected {
+    opacity: 1;
+    background: rgba(#288edf, 0.38);
   }
   &.m-current {
     outline: none !important;

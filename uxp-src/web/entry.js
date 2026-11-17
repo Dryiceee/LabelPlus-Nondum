@@ -14,8 +14,10 @@ if (IS_WEBKIT) document.documentElement.classList.add("typer-webkit");
 
 const report = (text) => notify("panelError", { text: String(text) });
 
-// Development builds: the test harness evaluates code in the panel
+// Development builds: the test harness evaluates code in the panel, and the
+// development copy never updates itself (app_src/config.js)
 if (process.env.TYPER_DEV === "1") {
+  window.typerDevBuild = true;
   on("devEval", async (message) => {
     try {
       // eslint-disable-next-line no-new-func

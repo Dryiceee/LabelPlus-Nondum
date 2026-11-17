@@ -189,28 +189,34 @@ async function parseSfntNames(fd, base, names) {
       } else {
         for (let k = 0; k + 1 < length; k += 2) value += String.fromCharCode(table.getUint16(start + k));
       }
-      if (value) names.push({ nameID, value });
+      if (value) names.push({ nameID, value, platformID, languageID: table.getUint16(r + 4) });
     }
     return;
   }
 }
 
-async function readFontNames(file) {
-  const names = [];
+// The name records of each face in the file: one list per face, so the faces
+// of a .ttc collection keep their own names
+async function readFontFaces(file) {
+  const faces = [];
   let fd = null;
   try {
     fd = await fs.open(files.toUrl(file), "r");
     const magic = await readAt(fd, 0, 12);
-    if (magic.byteLength < 12) return names;
+    if (magic.byteLength < 12) return faces;
     const tag = ascii(magic, 0, 4);
     if (tag === "ttcf") {
       const numFonts = Math.min(magic.getUint32(8), 64);
       const offsets = await readAt(fd, 12, numFonts * 4);
       for (let i = 0; i * 4 + 4 <= offsets.byteLength; i++) {
+        const names = [];
         await parseSfntNames(fd, offsets.getUint32(i * 4), names);
+        if (names.length) faces.push(names);
       }
     } else if (magic.getUint32(0) === 0x00010000 || tag === "OTTO" || tag === "true") {
+      const names = [];
       await parseSfntNames(fd, 0, names);
+      if (names.length) faces.push(names);
     }
   } catch (error) {
     // Unreadable or corrupt font file: skip it
@@ -221,7 +227,56 @@ async function readFontNames(file) {
       } catch (error) {}
     }
   }
-  return names;
+  return faces;
+}
+
+async function readFontNames(file) {
+  return [].concat(...(await readFontFaces(file)));
+}
+
+// Windows language ids of the Chinese name records: mainland and Singapore
+// first, then Taiwan, Hong Kong and Macao
+const CHINESE_LANGUAGE_IDS = [0x0804, 0x1004, 0x0404, 0x0c04, 0x1404];
+let localizedNameIndex = null;
+
+// PostScript name (normalized) -> the face's Chinese full name, or its
+// Chinese family name when the font has no Chinese full name
+async function buildLocalizedNameIndex() {
+  const fontFiles = [];
+  for (const dir of fontDirs()) await listFontFiles(dir, 0, fontFiles);
+  const index = new Map();
+  for (const file of fontFiles) {
+    const faces = await readFontFaces(file);
+    faces.forEach((names) => {
+      const postScript = names.find((record) => record.nameID === 6);
+      if (!postScript) return;
+      const pick = (nameID) => {
+        let best = null;
+        names.forEach((record) => {
+          if (record.nameID !== nameID || record.platformID !== 3) return;
+          const rank = CHINESE_LANGUAGE_IDS.indexOf(record.languageID);
+          if (rank !== -1 && (!best || rank < best.rank)) best = { rank, value: record.value.trim() };
+        });
+        return best && best.value ? best.value : "";
+      };
+      const name = pick(4) || pick(1);
+      const key = normalize(postScript.value);
+      if (name && key && !index.has(key)) index.set(key, name);
+    });
+  }
+  return index;
+}
+
+// postScriptNames: [string] -> { postScriptName: Chinese name } for the
+// installed fonts that carry one. The font folders are read once per session.
+async function localFontNames({ postScriptNames } = {}) {
+  if (!localizedNameIndex) localizedNameIndex = await buildLocalizedNameIndex();
+  const result = {};
+  (postScriptNames || []).forEach((postScriptName) => {
+    const name = localizedNameIndex.get(normalize(postScriptName));
+    if (name) result[postScriptName] = name;
+  });
+  return result;
 }
 
 async function buildFontIndex() {
@@ -515,10 +570,11 @@ module.exports = {
     deleteUserFile,
     stat,
     exportZipWithFonts,
+    localFontNames,
     fetchUrl,
     installFonts: (fontFiles) => installFonts(fontFiles, buildWindowsRegistrationScript),
     installUpdatePackage,
     pluginVersion: () => readManifestVersion(),
   },
-  _internals: { buildFontIndex, readFontNames, validatePackage, psSingleQuote },
+  _internals: { buildFontIndex, buildLocalizedNameIndex, readFontNames, validatePackage, psSingleQuote },
 };

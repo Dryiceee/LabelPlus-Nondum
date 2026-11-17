@@ -59,4 +59,29 @@ assert.strictEqual(fx.buildLayerEffects(undefined, undefined), null);
   fx.ADDABLE.forEach((key) => assert.strictEqual(fx.newEffect(key).desc._obj, key));
 }
 
+// Effects on the global light take the document's angle (and altitude for a
+// bevel): Photoshop keeps a stale local angle beside it
+{
+  const angle = (value) => ({ _unit: "angleUnit", _value: value });
+  const layer = {
+    _obj: "layerEffects",
+    dropShadowMulti: [
+      { _obj: "dropShadow", enabled: true, present: true, useGlobalAngle: true, localLightingAngle: angle(90) },
+      { _obj: "dropShadow", enabled: true, present: true, useGlobalAngle: false, localLightingAngle: angle(45) },
+    ],
+    bevelEmboss: { _obj: "bevelEmboss", enabled: true, present: true, useGlobalAngle: true, localLightingAngle: angle(90), localLightingAltitude: angle(30) },
+  };
+  const resolved = fx.resolveGlobalLight(layer, 123, 25);
+  assert.strictEqual(resolved.dropShadowMulti[0].localLightingAngle._value, 123);
+  assert.strictEqual(resolved.dropShadowMulti[0].useGlobalAngle, false);
+  assert.strictEqual(resolved.dropShadowMulti[1].localLightingAngle._value, 45);
+  assert.strictEqual(resolved.bevelEmboss.localLightingAngle._value, 123);
+  assert.strictEqual(resolved.bevelEmboss.localLightingAltitude._value, 25);
+  assert.strictEqual(layer.dropShadowMulti[0].localLightingAngle._value, 90, "the layer's descriptor is left as it was");
+  const shown = fx.effectsFromLayer(resolved);
+  assert.strictEqual(fx.fieldValue(shown.find((effect) => effect.key === "dropShadow").desc, "localLightingAngle"), 123);
+  // Without the document's angle nothing changes
+  assert.strictEqual(fx.resolveGlobalLight(layer, null, null), layer);
+}
+
 console.log("LabelPlus layer effects tests passed");

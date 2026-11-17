@@ -8,7 +8,9 @@ import {MdCancel, MdOutlineDocumentScanner, MdSave} from 'react-icons/md';
 
 import {locale, nativeAlert, getStyleObject, rgbToHex, getUserFonts, scanPsdFonts} from '../../utils';
 import {useContext} from '../../context';
-import {buildFontGroups} from '../../fontScan';
+import {buildFontGroups, getGroupDisplayName} from '../../fontScan';
+import {getChineseFontNames} from '../../fontLocalNames';
+import {getInterfaceLanguage} from '../../interfaceLanguage';
 import {buildFolderTree, flattenFolderTree} from '../../folderUtils';
 import useFontFinderMatches from '../../useFontFinderMatches';
 import {FontFinderBanner, FontFinderSuggestion, FontWebSearchButton} from './fontFinderSuggestion';
@@ -25,6 +27,7 @@ const FontScanRModal = React.memo(function FontScanRModal() {
     const context = useContext((state) => ({
         folders: state.folders,
         openFolders: state.openFolders,
+        language: state.language,
     }));
     const [step, setStep] = React.useState('pick');
     const [progress, setProgress] = React.useState({current: 0, total: 0, fileName: ''});
@@ -70,7 +73,31 @@ const FontScanRModal = React.memo(function FontScanRModal() {
         }
     };
 
-    const finishScan = (results, errors) => {
+    // In a Chinese interface the proposed style names use the fonts' Chinese
+    // names; a name the user already edited is kept
+    const localizeNames = (fontGroups, scanId) => {
+        if (!/^zh/i.test(getInterfaceLanguage(context.state))) return;
+        const labels = {fauxBold: '(' + locale.editStyleBold + ')', fauxItalic: '(' + locale.editStyleItalic + ')'};
+        getChineseFontNames(fontGroups.map(group => group.fontPostScriptName)).then(localNames => {
+            if (cancelledRef.current || scanIdRef.current !== scanId) return;
+            const renamed = {};
+            fontGroups.forEach(group => {
+                const name = getGroupDisplayName(group, localNames[group.fontPostScriptName], labels);
+                if (name !== group.defaultName) renamed[group.key] = {from: group.defaultName, to: name};
+            });
+            if (!Object.keys(renamed).length) return;
+            setGroups(current => current.map(group => (renamed[group.key] ? {...group, defaultName: renamed[group.key].to} : group)));
+            setNames(current => {
+                const next = {...current};
+                Object.keys(renamed).forEach(key => {
+                    if (next[key] === undefined || next[key] === renamed[key].from) next[key] = renamed[key].to;
+                });
+                return next;
+            });
+        });
+    };
+
+    const finishScan = (results, errors, scanId) => {
         const fontGroups = buildFontGroups(results);
         const layers = results.reduce((sum, result) => sum + (result.layers ? result.layers.length : 0), 0);
         const defaultNames = {};
@@ -83,6 +110,7 @@ const FontScanRModal = React.memo(function FontScanRModal() {
         setSelectedKeys(fontGroups.map(group => group.key));
         setNames(defaultNames);
         setStep('results');
+        localizeNames(fontGroups, scanId);
     };
 
     const startScan = files => {
@@ -97,7 +125,7 @@ const FontScanRModal = React.memo(function FontScanRModal() {
         const next = index => {
             if (stale()) return;
             if (index >= files.length) {
-                finishScan(results, errors);
+                finishScan(results, errors, scanId);
                 return;
             }
             setProgress({current: index + 1, total: files.length, fileName: files[index].name});
@@ -155,6 +183,7 @@ const FontScanRModal = React.memo(function FontScanRModal() {
             name: (names[group.key] || group.defaultName).trim() || group.defaultName,
             textProps: group.textProps,
             stroke: group.stroke,
+            effects: group.effects || [],
             prefixes: [],
             edited: Date.now()
         }));
@@ -393,6 +422,14 @@ const FontGroupRow = React.memo(function FontGroupRow(props) {
                         <span className="fsr-chip fsr-chip-stroke" title={locale.fontScanStrokeHint}>
                             <i style={{background: rgbToHex(group.stroke.color)}}></i>
                             {group.stroke.size}px
+                        </span>
+                    )}
+                    {!!(group.effects && group.effects.length) && (
+                        <span
+                            className="fsr-chip"
+                            title={(locale.lpFxTitle || 'Layer styles') + ': ' + group.effects.map(effect => locale['lpFx_' + effect.key] || effect.key).join(', ')}
+                        >
+                            fx {group.effects.length}
                         </span>
                     )}
                     {!props.installed && (!props.finderEntry || props.finderEntry.state !== 'installed') && (

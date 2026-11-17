@@ -4,9 +4,9 @@
 
 ## 加载插件
 
-1. 构建：`npm run build:uxp`
-2. 打开 Adobe UXP Developer Tools，选 Add Plugin，指向 `uxp/manifest.json`，再点 Load。
-3. 面板菜单里叫 LabelPlus-Nondum。它有自己的插件 ID（`com.dryiceee.labelplus-nondum`）和数据目录（`%APPDATA%\LabelPlus-Nondum\UXP`），可以和已安装的 TypeR 共存，但样式要重新导入。
+1. 构建开发版：`npm run build:uxp:dev`
+2. 打开 Adobe UXP Developer Tools，选 Add Plugin，指向 `uxp-dev/manifest.json`，再点 Load。改完代码后重新构建，再点 Reload。
+3. 面板菜单里叫 LabelPlus-Nondum DEV。它有自己的插件 ID（`com.dryiceee.labelplus-nondum.dev`）和数据目录（`%APPDATA%\LabelPlus-Nondum-Dev\UXP`），可以和已安装的正式版共存。第一次打开时会复制一份正式版的样式和设置。
 
 ## 准备样本
 
@@ -34,7 +34,7 @@
 
 ## 整章处理
 
-先用“先在当前文档上试”，确认没问题再跑整章。
+先只选一两页跑“处理整章”，确认没问题再跑整章。
 
 | # | 操作 | 预期 | 如果不对，可能的原因 |
 |---|---|---|---|
@@ -51,7 +51,7 @@
 
 ## 涂白
 
-在分组选项里勾选“涂白”，用“处理整章”或“先在当前文档上试”运行。“生成 PSD”只放文字，不涂白。
+在分组选项里勾选“涂白”，用“处理整章”运行。“生成 PSD”只放文字，不涂白。
 
 | # | 操作 | 预期 | 如果不对，可能的原因 |
 |---|---|---|---|
@@ -62,7 +62,7 @@
 | 33 | 网点、渐变或灰色气泡 | 不涂，清单提示“不是纯白或纯黑” | |
 | 34 | 拟声词标号落在分镜背景或黑色分镜上 | 不涂，清单提示“区域里还有别的气泡或画面” | 厚度阈值需要调 |
 | 35 | 用显示或隐藏涂白层的快捷键 | 涂白层一起隐藏，原文重新出现 | |
-| 36 | 同一文档“先在当前文档上试”两次 | 只有一个 `LabelPlus Clean` 图层，不会叠加 | |
+| 36 | 同一页“处理整章”两次 | 只有一个 `LabelPlus Clean` 图层，不会叠加 | |
 
 ## 设置窗口和面板
 

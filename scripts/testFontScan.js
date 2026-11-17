@@ -100,6 +100,23 @@ assert.strictEqual(paragraphStyle.justificationMethodType, "justifMethodAutomati
 assert.strictEqual(paragraphStyle.textEveryLineComposer, false);
 assert.strictEqual(paragraphStyle.alignment, "center");
 
+// Layer styles other than the stroke travel with the style, as for a style
+// made from the selected layer; the stroke keeps its own field
+const shadow = { _obj: "dropShadow", enabled: true, present: true, opacity: { _unit: "percentUnit", _value: 60 } };
+const fxGroups = buildFontGroups([{
+  file: "fx.psd",
+  layers: [
+    makeLayer([makeRun({ fontPostScriptName: "FxFont" })], { layerEffects: { _obj: "layerEffects", dropShadow: shadow, frameFX: { _obj: "frameFX", enabled: true } } }),
+    makeLayer([makeRun({ fontPostScriptName: "FxFont" })], { layerEffects: { _obj: "layerEffects", dropShadow: shadow } }),
+    makeLayer([makeRun({ fontPostScriptName: "FxFont" })]),
+  ],
+}]);
+assert.strictEqual(fxGroups.length, 1);
+assert.deepStrictEqual(fxGroups[0].effects.map((effect) => effect.key), ["dropShadow"]);
+assert.strictEqual(fxGroups[0].effects[0].desc.opacity._value, 60);
+const plainGroup = buildFontGroups([{ file: "plain.psd", layers: [makeLayer([makeRun({ fontPostScriptName: "Plain" })])] }])[0];
+assert.deepStrictEqual(plainGroup.effects, []);
+
 // Empty input stays safe
 assert.deepStrictEqual(buildFontGroups([]), []);
 assert.deepStrictEqual(buildFontGroups(null), []);

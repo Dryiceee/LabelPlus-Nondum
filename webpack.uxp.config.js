@@ -8,7 +8,9 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 
 const OUT = path.join(__dirname, "uxp");
-const outputPath = (env) => env.mac ? path.join(__dirname, "uxp-mac") : env.addon ? path.join(__dirname, "uxp-addon") : OUT;
+// The development copy (--env dev) has its own folder, loaded through UXP
+// Developer Tools next to the installed plugin (scripts/buildUxp.js)
+const outputPath = (env) => env.mac ? path.join(__dirname, "uxp-mac") : env.addon ? path.join(__dirname, "uxp-addon") : env.dev ? path.join(__dirname, "uxp-dev") : OUT;
 const UXP_MODULES = ["photoshop", "uxp", "fs", "os", "path", "typer-keys.uxpaddon"];
 
 const hostConfig = (env, argv, entry, filename, library) => ({

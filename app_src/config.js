@@ -12,9 +12,11 @@ const config = {
   // Updates: the panel reads this repository's releases at most once a day and
   // offers LabelPlus-Nondum-win.ccx of a newer one (updateLogic.js). 1.0.0
   // shipped with both off, so its users update once by hand.
-  // checkUpdates is the default of the setting; updatesEnabled shows it at all
+  // checkUpdates is the default of the setting; updatesEnabled shows it at all.
+  // The development copy (window.typerDevBuild, uxp-src/web/entry.js) would
+  // install the released plugin over nothing it owns: no updates there.
   checkUpdates: true,
-  updatesEnabled: true,
+  updatesEnabled: !(typeof window !== "undefined" && window.typerDevBuild),
   languages: {
     auto: "Auto",
     zh_CN: "简体中文",

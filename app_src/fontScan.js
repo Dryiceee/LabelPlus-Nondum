@@ -1,6 +1,11 @@
+import { effectsFromLayer } from "./labelplus/layerEffects";
+
 // FontScanR aggregation logic. Pure functions, no CEP dependency, unit-testable.
 // Input: results of host scanPsdFonts() calls, one per .psd file:
-//   {file, layers: [{layerName, antiAlias, typeUnit, paragraphStyle, stroke, runs: [textStyle]}]}
+//   {file, layers: [{layerName, antiAlias, typeUnit, paragraphStyle, stroke, layerEffects, runs: [textStyle]}]}
+// layerEffects is the layer's whole layerEffects descriptor: its effects other
+// than the stroke become the style's layer styles, as for a style made from
+// the selected layer.
 // Output: font groups keyed by font variant (real or synthetic bold/italic kept
 // separate), each carrying the most-used size and a ready-to-save style payload.
 
@@ -34,13 +39,16 @@ const getFontGroupKey = (textStyle) => {
   return [font, textStyle.syntheticBold ? 1 : 0, textStyle.syntheticItalic ? 1 : 0].join("|");
 };
 
-const getVariantSignature = (textStyle, layer) => {
+const effectsSignature = (effects) => (effects && effects.length ? JSON.stringify(effects) : "none");
+
+const getVariantSignature = (textStyle, layer, effects) => {
   return [
     roundSize(textStyle.size),
     layer.typeUnit || "pixelsUnit",
     layer.antiAlias || "antiAliasSmooth",
     colorSignature(textStyle.color),
     strokeSignature(layer.stroke),
+    effectsSignature(effects),
   ].join("~");
 };
 
@@ -88,14 +96,16 @@ const cleanTextStyle = (textStyle) => {
   return cleaned;
 };
 
-const getGroupDisplayName = (group) => {
-  let name = group.fontName || group.fontPostScriptName || "Unknown";
+// localName: the font's own name in the interface language (a full name,
+// weight included), which then replaces the English family and style names
+const getGroupDisplayName = (group, localName, labels) => {
+  let name = localName || group.fontName || group.fontPostScriptName || "Unknown";
   const styleName = group.fontStyleName || "";
-  if (styleName && styleName.toLowerCase() !== "regular" && name.toLowerCase().indexOf(styleName.toLowerCase()) === -1) {
+  if (!localName && styleName && styleName.toLowerCase() !== "regular" && name.toLowerCase().indexOf(styleName.toLowerCase()) === -1) {
     name += " " + styleName;
   }
-  if (group.syntheticBold) name += " (faux bold)";
-  if (group.syntheticItalic) name += " (faux italic)";
+  if (group.syntheticBold) name += " " + ((labels && labels.fauxBold) || "(faux bold)");
+  if (group.syntheticItalic) name += " " + ((labels && labels.fauxItalic) || "(faux italic)");
   return name;
 };
 
@@ -111,10 +121,11 @@ const buildFontGroups = (fileResults) => {
     fileResult.layers.forEach((layer) => {
       if (!layer || !Array.isArray(layer.runs)) return;
       const seenInLayer = new Set();
+      const effects = effectsFromLayer(layer.layerEffects);
       layer.runs.forEach((textStyle) => {
         if (!textStyle || (!textStyle.fontPostScriptName && !textStyle.fontName)) return;
         const key = getFontGroupKey(textStyle);
-        const variantSig = getVariantSignature(textStyle, layer);
+        const variantSig = getVariantSignature(textStyle, layer, effects);
         const layerSig = key + "::" + variantSig;
         if (seenInLayer.has(layerSig)) return;
         seenInLayer.add(layerSig);
@@ -152,6 +163,7 @@ const buildFontGroups = (fileResults) => {
             antiAlias: layer.antiAlias || "antiAliasSmooth",
             paragraphStyle: layer.paragraphStyle || null,
             stroke: layer.stroke || null,
+            effects: effects,
           };
           group.variants.set(variantSig, variant);
         }
@@ -209,6 +221,7 @@ const buildFontGroups = (fileResults) => {
           typeUnit: representative.typeUnit,
         },
         stroke: normalizeStroke(representative.stroke),
+        effects: representative.effects || [],
       };
     })
     .sort((a, b) => b.usageCount - a.usageCount || a.order - b.order);

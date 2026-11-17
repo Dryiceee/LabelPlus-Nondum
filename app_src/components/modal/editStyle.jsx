@@ -47,7 +47,9 @@ const EditStyleModal = React.memo(function EditStyleModal() {
   }));
   const currentData = context.state.modalData;
   const [name, setName] = React.useState(currentData.name || "");
-  const [folder, setFolder] = React.useState(currentData.folder || "");
+  // A style without a folder goes to the "Unsorted" folder (app_src/context.jsx)
+  const unsortedFolderId = (context.state.folders || []).find((item) => item && item.unsorted)?.id || "";
+  const [folder, setFolder] = React.useState(currentData.folder || unsortedFolderId);
   const [textType, setTextType] = React.useState(
     // This edition only makes point text
     "point"
@@ -260,7 +262,7 @@ const EditStyleModal = React.memo(function EditStyleModal() {
               <div className="field-label">{locale.editStyleFolderLabel}</div>
               <div className="field-input">
                 <select value={folder} onChange={changeStyleFolder} className="topcoat-textarea">
-                  <option value="">{locale.noFolderTitle}</option>
+                  {!unsortedFolderId && <option value="">{locale.noFolderTitle}</option>}
                   {folderOptions.map((option) => (
                     <option key={option.id} value={option.id}>
                       {"".padStart(option.depth * 2, ' ')}{option.label}

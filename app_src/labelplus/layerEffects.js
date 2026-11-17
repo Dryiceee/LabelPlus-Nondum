@@ -146,6 +146,36 @@ function withColor(desc, hex) {
 
 const newEffect = (key) => ({ key, desc: DEFAULTS[key]() });
 
+// An effect set to "Use Global Light" keeps a stale localLightingAngle of its
+// own: Photoshop draws it with the document's global angle (and altitude, for
+// bevels) instead. Those are written into the effects, global light turned
+// off, so a style read from the layer looks the same in every document and
+// the editor shows the angle Photoshop shows. globalAngle/globalAltitude:
+// numbers, or null when the document did not give them.
+function resolveGlobalLight(layerEffects, globalAngle, globalAltitude) {
+  if (!layerEffects || typeof layerEffects !== "object") return layerEffects;
+  const hasAngle = typeof globalAngle === "number" && isFinite(globalAngle);
+  const hasAltitude = typeof globalAltitude === "number" && isFinite(globalAltitude);
+  if (!hasAngle) return layerEffects;
+  const setNumber = (desc, key, number, unitName) => {
+    if (desc[key] && typeof desc[key] === "object" && "_value" in desc[key]) desc[key]._value = number;
+    else desc[key] = unit(unitName, number);
+  };
+  const resolve = (desc) => {
+    if (!desc || typeof desc !== "object" || desc.useGlobalAngle !== true) return;
+    setNumber(desc, "localLightingAngle", globalAngle, "angleUnit");
+    if (hasAltitude && "localLightingAltitude" in desc) setNumber(desc, "localLightingAltitude", globalAltitude, "angleUnit");
+    desc.useGlobalAngle = false;
+  };
+  const next = clone(layerEffects);
+  Object.keys(next).forEach((key) => {
+    const value = next[key];
+    if (Array.isArray(value)) value.forEach(resolve);
+    else resolve(value);
+  });
+  return next;
+}
+
 export {
   EFFECT_KEYS,
   ADDABLE,
@@ -157,4 +187,5 @@ export {
   colorHex,
   withColor,
   newEffect,
+  resolveGlobalLight,
 };

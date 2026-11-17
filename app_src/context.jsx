@@ -73,6 +73,7 @@ const storeFields = [
   "text",
   "styles",
   "folders",
+  "lockedFolders",
   "textScale",
   "textSizeIncrement",
   "currentLineIndex",
@@ -190,6 +191,22 @@ const showStyleSizeTipIfEligible = (state) => {
 const defaultShortcut = getDefaultShortcuts();
 const shortcutMigration = migrateShortcutDefaults(storage.data?.shortcut, defaultShortcut);
 
+// "Unsorted" is a real folder, marked `unsorted: true`: the styles without a
+// folder land in it (Phase 1 of the reducer), and it has every action of the
+// other folders. Copies and imports of it are ordinary folders.
+const findUnsortedFolder = (folders) => (folders || []).find((folder) => folder && folder.unsorted) || null;
+const withoutUnsortedMark = (folder) => {
+  if (!folder || !folder.unsorted) return folder;
+  const { unsorted, ...rest } = folder;
+  return rest;
+};
+
+// A locked folder keeps its styles: nothing is deleted, moved in or moved out
+const isFolderLocked = (state, folderId) => {
+  const id = folderId || findUnsortedFolder(state.folders)?.id || "unsorted";
+  return (state.lockedFolders || []).includes(id);
+};
+
 const normalizeFolders = (folders) => {
   folders = repairFolderHierarchy(folders);
   const normalized = (folders || []).map((folder) => {
@@ -252,6 +269,8 @@ const initialState = {
   styles: [],
   folders: [],
   openFolders: [],
+  // Folder ids, "unsorted" for the styles without a folder
+  lockedFolders: [],
   textScale: null,
   textSizeIncrement: 1,
   currentLine: null,
@@ -735,7 +754,7 @@ const baseReducer = (state, action) => {
       const folderId = folderData.id || Math.random().toString(36).substring(2, 8);
       const siblingCount = state.folders.filter((folder) => !(folder.parentId || null)).length;
       const folder = {
-        ...folderData,
+        ...withoutUnsortedMark(folderData),
         id: folderId,
         parentId: null,
         order: typeof folderData.order === "number" ? folderData.order : siblingCount,
@@ -759,7 +778,7 @@ const baseReducer = (state, action) => {
       const folderIds = new Set(importedFolders.map((folder) => folder.id));
       // Imported top-level folders go after the existing ones
       const siblingCount = state.folders.filter((folder) => !(folder.parentId || null)).length;
-      newState.folders = normalizeFolders(state.folders.concat(importedFolders.map((folder) => (
+      newState.folders = normalizeFolders(state.folders.concat(importedFolders.map(withoutUnsortedMark).map((folder) => (
         folder.parentId ? folder : { ...folder, order: siblingCount + (folder.order || 0) }
       ))));
       newState.styles = state.styles.concat(
@@ -777,6 +796,7 @@ const baseReducer = (state, action) => {
     case "deleteFolder": {
       if (!action.id) break;
       const idsToRemove = [action.id].concat(collectDescendantIds(state.folders, action.id));
+      if (idsToRemove.some((id) => isFolderLocked(state, id))) break;
       const folders = state.folders.filter((folder) => !idsToRemove.includes(folder.id)).map((folder) => ({ ...folder }));
       let styles = state.styles.concat([]);
       if (action.permanent) {
@@ -814,7 +834,7 @@ const baseReducer = (state, action) => {
         const siblingCount = folders.filter((f) => (f.parentId || null) === (parentId || null)).length;
         const newFolderId = Math.random().toString(36).substr(2, 8);
         const newFolder = {
-          ...folder,
+          ...withoutUnsortedMark(folder),
           id: newFolderId,
           name: folder.name + " copy",
           parentId: parentId || null,
@@ -831,6 +851,13 @@ const baseReducer = (state, action) => {
       newState.folders = normalizeFolders(folders);
       newState.styles = styles;
       newState.openFolders = Array.from(new Set(openFolders.concat(createdFolderIds)));
+      break;
+    }
+
+    case "toggleFolderLock": {
+      const id = action.id || "unsorted";
+      const locked = state.lockedFolders || [];
+      newState.lockedFolders = locked.includes(id) ? locked.filter((f) => f !== id) : locked.concat(id);
       break;
     }
 
@@ -863,6 +890,7 @@ const baseReducer = (state, action) => {
       if (folderId && !state.folders.find((folder) => folder.id === folderId)) break;
       const movedStyle = state.styles.find((style) => style.id === styleId);
       if (!movedStyle) break;
+      if ((movedStyle.folder || null) !== folderId && (isFolderLocked(state, movedStyle.folder) || isFolderLocked(state, folderId))) break;
 
       const styles = state.styles
         .filter((style) => style.id !== styleId)
@@ -882,6 +910,35 @@ const baseReducer = (state, action) => {
           return aOrder - bOrder;
         });
 
+      newState.styles = styles.filter((style) => (style.folder || null) !== folderId).concat(targetStyles);
+      break;
+    }
+
+    // Several styles to one folder, in their order in the list; `order` sets
+    // the order of the target folder. Locked folders let none in or out.
+    case "moveStylesToFolder": {
+      const folderId = action.folderId === undefined || action.folderId === "" || action.folderId === "__unsorted__" ? null : action.folderId;
+      if (folderId && !state.folders.find((folder) => folder.id === folderId)) break;
+      const wanted = new Set(action.ids || []);
+      const movable = new Set(state.styles.filter((style) => wanted.has(style.id) && (
+        (style.folder || null) === folderId || (!isFolderLocked(state, style.folder) && !isFolderLocked(state, folderId))
+      )).map((style) => style.id));
+      if (!movable.size) break;
+      const moved = state.styles.filter((style) => movable.has(style.id)).map((style) => ({ ...style, folder: folderId }));
+      const styles = state.styles.filter((style) => !movable.has(style.id)).concat(moved);
+      const orderIds = action.order || [];
+      if (!orderIds.length) {
+        newState.styles = styles;
+        break;
+      }
+      const orderMap = new Map(orderIds.map((id, index) => [id, index]));
+      const targetStyles = styles
+        .filter((style) => (style.folder || null) === folderId)
+        .sort((a, b) => {
+          const aOrder = orderMap.has(a.id) ? orderMap.get(a.id) : Number.MAX_SAFE_INTEGER;
+          const bOrder = orderMap.has(b.id) ? orderMap.get(b.id) : Number.MAX_SAFE_INTEGER;
+          return aOrder - bOrder;
+        });
       newState.styles = styles.filter((style) => (style.folder || null) !== folderId).concat(targetStyles);
       break;
     }
@@ -918,7 +975,16 @@ const baseReducer = (state, action) => {
     }
 
     case "deleteStyle": {
+      const deleted = state.styles.find((s) => s.id === action.id);
+      if (deleted && isFolderLocked(state, deleted.folder)) break;
       newState.styles = state.styles.filter((s) => s.id !== action.id);
+      break;
+    }
+
+    case "deleteStyles": {
+      const ids = new Set(action.ids || []);
+      const next = state.styles.filter((style) => !ids.has(style.id) || isFolderLocked(state, style.folder));
+      if (next.length !== state.styles.length) newState.styles = next;
       break;
     }
 
@@ -1518,17 +1584,43 @@ const baseReducer = (state, action) => {
 
     // Keep untouched style objects identity-stable so memoized style and
     // line components can skip re-rendering after a single-style edit
-    const validFolderIds = new Set(newState.folders.map((folder) => folder.id));
-    newState.styles = (newState.styles || []).map((style) => {
-      const folderId = style.folder || null;
-      if (folderId === null || validFolderIds.has(folderId)) return style;
-      return { ...style, folder: null };
-    });
+    let validFolderIds = new Set(newState.folders.map((folder) => folder.id));
+    let unsortedFolder = findUnsortedFolder(newState.folders);
+    if (newState.styles.some((style) => !style.folder || !validFolderIds.has(style.folder))) {
+      if (!unsortedFolder) {
+        unsortedFolder = {
+          id: "unsorted-" + Math.random().toString(36).substring(2, 8),
+          name: locale.noFolderTitle || "Unsorted",
+          parentId: null,
+          order: -1,
+          unsorted: true,
+        };
+        newState.folders = normalizeFolders(newState.folders.concat(unsortedFolder));
+        validFolderIds = new Set(newState.folders.map((folder) => folder.id));
+      }
+      const unsortedId = unsortedFolder.id;
+      newState.styles = newState.styles.map((style) => (
+        style.folder && validFolderIds.has(style.folder) ? style : { ...style, folder: unsortedId }
+      ));
+    }
+    // Open and locked states saved for the former pseudo folder
+    if (unsortedFolder) {
+      const adopt = (ids) => (Array.isArray(ids) && ids.includes("unsorted")
+        ? Array.from(new Set(ids.map((id) => (id === "unsorted" ? unsortedFolder.id : id))))
+        : ids);
+      newState.openFolders = adopt(newState.openFolders);
+      newState.lockedFolders = adopt(newState.lockedFolders);
+    }
 
     if (newState.openFolders) {
       if (newState.openFolders.some((id) => id !== "unsorted" && !validFolderIds.has(id))) {
         newState.openFolders = newState.openFolders.filter((id) => id === "unsorted" || validFolderIds.has(id));
       }
+    }
+    if (!Array.isArray(newState.lockedFolders)) {
+      newState.lockedFolders = [];
+    } else if (newState.lockedFolders.some((id) => id !== "unsorted" && !validFolderIds.has(id))) {
+      newState.lockedFolders = newState.lockedFolders.filter((id) => id === "unsorted" || validFolderIds.has(id));
     }
 
     if (newState.defaultStyleId) {

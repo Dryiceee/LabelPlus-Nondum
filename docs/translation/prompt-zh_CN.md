@@ -82,7 +82,6 @@ lpGroupCenter=气泡内居中
 lpGroupClean=涂白
 lpNoStyle=默认样式
 lpProcessButton=处理整章
-lpProcessActive=先在当前文档上试
 lpStop=处理完这一页后停止
 lpIssue_noBubble=标号附近没有找到气泡，文字没有移动。
 lpIssue_missingFont=分组“{group}”使用的字体 {font} 没有安装。
