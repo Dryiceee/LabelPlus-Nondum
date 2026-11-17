@@ -101,7 +101,7 @@ irm https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.ps1 | i
    - **生成 PSD：** 只放文字。
    - **处理整章：** 放文字，再居中和涂白。
 5. 看处理报告，逐条检查列出的标号。
-6. 导入完成后，输出文件夹会在 Align 下方的翻页条里打开第一页，接着逐页检查和修改。不想自动打开，可以在“设置 > 常规 > 翻页”里关掉；最多同时打开的页数也在这里改。
+6. 导入完成后，输出文件夹会在 Align 下方的翻页条里打开第一页。不想自动打开，可以在“设置 > 常规 > 翻页”里关掉；最多同时打开的页数也在这里改。
 
    <img src="./readme-assets/main-panel.png" width="320" alt="主面板：居中按钮、翻页条和样式库">
 
