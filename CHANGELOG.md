@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.1
+
+- Folder locks: every folder, Unsorted included, locks and unlocks from its header or its right-click menu. A locked folder keeps its styles: none can be deleted, edited or moved in or out.
+- Unsorted is a folder like the others, with every folder action. Styles without a folder land in it.
+- Right-click a folder to delete it; Shift+click deletes its styles too.
+- Several styles at once: Ctrl+click adds or removes one, Shift+click takes a run of one folder. The chosen styles move by drag, and copy, paste and delete together from the right-click menu.
+- FontScanR names the proposed styles after the fonts' Chinese names in a Chinese interface, and keeps every layer style of the scanned layers (drop shadow, glows, overlays…), as a style made from a layer does.
+- Layer styles set to use the global light are read with the document's angle, so a style made from a layer shows and applies the angle Photoshop shows. Styles saved before keep the old angle until read again.
+- The LabelPlus window no longer has "Try on the open document".
+
 ## 1.1.0
 
 1.0.0 has no update in the panel: update it once by hand, with `installer\update_win.cmd` from LabelPlus-Nondum.zip or by installing again. From 1.1.0 on, new versions are offered in the panel.
