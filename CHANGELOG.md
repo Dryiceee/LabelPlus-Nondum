@@ -1,8 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
-- SFX editor (the lightning button at the bottom of the panel): lays out the selected Chinese text layer as a sound effect along a line, an arc or a hand-drawn path, with spacing, character rotation and first/last character sizes, and per-character move, rotate and resize. Apply replaces the text layer by one native shape layer in its place, drawn from Photoshop's own outlines of the font (holes kept); the fill colour and anchors stay editable in Photoshop. The settings are saved with the PSD in the layer's metadata, so the layer opens again in the editor. One undo reverts an Apply; Cancel leaves the document as it was.
+- SFX editor (the lightning button at the bottom of the panel), modelled on TypeR Studio's SFX tool: lays out the selected Chinese text layer as a sound effect along a line, an arc or a hand-drawn path, with spacing, character rotation and first/last character sizes, and per-character move, rotate and resize.
+- Select characters with a marquee, a click or Shift+click to edit just those. The diamond in the middle of a selection bends only that stretch; an end square dragged with a selection bends the path where the selection starts, and the characters before it stay put.
+- Bends add Bézier anchors: click one to show its handles, drag them into an S curve, Alt+drag to move one side only. Reshaping the path leaves the characters outside the changed part where they are.
+- Apply replaces the text layer by one native shape layer in its place, drawn from Photoshop's own outlines of the font (holes kept); the fill colour and anchors stay editable in Photoshop. One undo reverts an Apply; Cancel leaves the document as it was.
+- The settings are saved with the PSD in the layer's metadata, so the layer opens again in the editor; a layer moved in Photoshop is followed.
 
 ## 1.1.1
 
