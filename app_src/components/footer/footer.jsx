@@ -1,7 +1,7 @@
 import "./footer.scss";
 
 import React from "react";
-import { FiFileText, FiFolderMinus, FiFolderPlus, FiSettings } from "react-icons/fi";
+import { FiFileText, FiFolderMinus, FiFolderPlus, FiSettings, FiZap } from "react-icons/fi";
 import { MdAdsClick, MdCleaningServices, MdFilterNone, MdOutlineAutoAwesome } from "react-icons/md";
 import { locale } from "../../utils";
 import { useContext } from "../../context";
@@ -9,6 +9,7 @@ import HiddenFileInput from "../hiddenFileInput/hiddenFileInput";
 import Notice from "../notice/notice";
 import { isFooterModeVisible, isWindowTooShortForTextShapeR, withProductLayout } from "../../uiLayout";
 import { toggleTextShapeR } from "../../shortcutCommands";
+import { isSfxAvailable, openSfxEditor } from "../../sfx/openSfx";
 
 // Shared with Settings > Appearance, which lists the toggles one by one
 export const FOOTER_MODE_ICONS = {
@@ -210,6 +211,12 @@ const AppFooter = React.memo(function AppFooter() {
         <button type="button" className="footer-icon-button" title={locale.lpTitle} aria-label={locale.lpTitle} onClick={openLabelPlus}>
           <FiFileText size={14} />
         </button>
+        {/* SFX editor: a Photoshop dialog, UXP only (uxp-src/host/sfx.js) */}
+        {isSfxAvailable() && (
+        <button type="button" className="footer-icon-button" data-tour="sfx" title={locale.sfxButtonTitle || "SFX editor"} aria-label={locale.sfxButtonTitle || "SFX editor"} onClick={openSfxEditor}>
+          <FiZap size={14} />
+        </button>
+        )}
         <button type="button" className="footer-icon-button" data-tour="settings" title={locale.footerSettings} aria-label={locale.footerSettings} onClick={openSettings}>
           <FiSettings size={14} />
         </button>

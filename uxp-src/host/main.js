@@ -12,6 +12,7 @@ if (crashTrace) crashTrace.install();
 const photoshop = require("./photoshop");
 const smartPaste = require("./smartPaste");
 const labelplus = require("./labelplus");
+const sfx = require("./sfx");
 const files = require("./files");
 const keyboard = require("./keyboard");
 const keysHelper = require("./keysHelper");
@@ -446,8 +447,17 @@ const requests = {
   },
   openKeyboardAccess: () => systemCall('open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"'),
   log: (...args) => log("panel:", ...args),
+  // SFX editor (uxp-src/host/sfx.js): a modal window, open for as long as the
+  // user edits, so it stays out of the evalScript queue and its time limit
+  sfxOpen: () => sfx.methods.sfxOpen(),
 };
 Object.assign(requests, services.requests);
+sfx.setup({
+  getStrings: () => readLocaleStrings(),
+  onDocumentChanged: () => onPhotoshopEvent("set", { _isCommand: true }),
+  // Only from a panel that is up and showing (not while the plugin starts)
+  canShowWindow: () => !!view && panelVisible && webviewReady && !!document.body,
+});
 
 // Panel requests in the crash trace: evalScript has its own lines, and the
 // storage writes and log lines say nothing about Photoshop
@@ -700,7 +710,7 @@ async function startOnce() {
 const devResultListeners = [];
 if (typeof TYPER_DEV !== "undefined" && TYPER_DEV) {
   require("./devChannel").start(post, (listener) => devResultListeners.push(listener));
-  globalThis.__typer = { photoshop, files, keyboard, services, methods, requests, post, mirror, getMirror: () => mirrorFiles, getHostEnvironment, onThemeChanged };
+  globalThis.__typer = { photoshop, sfx, files, keyboard, services, methods, requests, post, mirror, getMirror: () => mirrorFiles, getHostEnvironment, onThemeChanged };
 }
 
 

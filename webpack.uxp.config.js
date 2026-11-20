@@ -75,9 +75,30 @@ const panelConfig = (env, argv) => {
   });
 };
 
+// The SFX editor window (uxp/sfx), its own page: the host shows it in a modal
+// dialog (uxp-src/host/sfx.js). Same loaders as the panel.
+const sfxConfig = (env, argv) => {
+  const panel = panelConfig(env, argv);
+  return Object.assign({}, panel, {
+    name: "uxp-sfx",
+    entry: { sfx: "./uxp-src/sfx/entry.jsx" },
+    output: Object.assign({}, panel.output, {
+      path: path.join(outputPath(env), "sfx"),
+      filename: "sfx.js",
+      chunkFilename: "[name].[contenthash:12].sfx.js",
+      clean: true,
+    }),
+    plugins: [
+      new HtmlWebpackPlugin({ template: "./uxp-src/sfx/index.html", filename: "index.html" }),
+      new MiniCssExtractPlugin({ filename: "sfx.css" }),
+      new webpack.DefinePlugin({ "process.env.TYPER_UXP": JSON.stringify("1"), "process.env.TYPER_DEV": JSON.stringify(env.dev ? "1" : "0") }),
+    ],
+  });
+};
+
 module.exports = (env = {}, argv = {}) => {
   if (env.mac && env.addon) throw new Error("Choose either macOS or Windows addon output");
   if (env.addon && (env.dev || env.trace || env.diagnostic || env.hostTest)) throw new Error("Build the Windows addon preview separately from developer/diagnostic builds");
   if (env.hostTest) return [hostConfig(env, argv, "./uxp-src/host/photoshop.js", "host-test.js", "TypeRHost")];
-  return [hostConfig(env, argv, env.diagnostic ? "./uxp-src/host/diagnosticEntry.js" : env.trace ? "./uxp-src/host/traceEntry.js" : "./uxp-src/host/main.js", "host.js"), panelConfig(env, argv)];
+  return [hostConfig(env, argv, env.diagnostic ? "./uxp-src/host/diagnosticEntry.js" : env.trace ? "./uxp-src/host/traceEntry.js" : "./uxp-src/host/main.js", "host.js"), panelConfig(env, argv), sfxConfig(env, argv)];
 };
