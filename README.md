@@ -110,6 +110,10 @@ irm https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.ps1 | i
 
 ### SFX 拟声字
 
+演示依次是：拖端点旋转拉伸，拖 ● 弯曲，Shift+拖端点放大尾字，Alt+拖端点让每个字原地旋转，单独旋转、移动一个字，框选两个字后拖 ◆ 只弯这一段，拖控制柄调成 S 形，最后点「应用」。
+
+<img src="./readme-assets/sfx-editor-demo.gif" alt="SFX 编辑器演示：把「轰隆咔嚓」排成弯曲的拟声字">
+
 1. 用文字工具打好拟声字（如「轰隆」），选中这个文字图层，点面板底部的闪电按钮（SFX 编辑器）。
 2. 窗口里显示当前页面，文字、字体、字号、颜色和位置都取自选中的图层。
 3. 排字：
