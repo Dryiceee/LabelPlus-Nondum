@@ -3,7 +3,8 @@
 // folder. Never part of a release build.
 const fs = require("fs");
 
-const DIR = "/private/tmp/typer-uxp-dev/";
+// UXP's fs takes file: URLs on Windows (see files.js toUrl): C:\private\tmp\typer-uxp-dev
+const DIR = require("os").platform() === "win32" ? "file:/C:/private/tmp/typer-uxp-dev/" : "/private/tmp/typer-uxp-dev/";
 const PANEL_TIMEOUT_MS = 20000;
 
 function writeResult(id, out) {
@@ -13,7 +14,14 @@ function writeResult(id, out) {
 }
 
 function start(postToPanel, onPanelResult) {
+  // A command left from an earlier session never runs on load: replaying it
+  // while the plugin starts (e.g. one that opens a modal window) crashed
+  // Photoshop. Only commands written after this point run.
   let lastId = null;
+  try {
+    const stale = fs.readFileSync(DIR + "cmd.js", { encoding: "utf-8" });
+    lastId = stale.slice(0, stale.indexOf("\n")).split(" ")[0];
+  } catch (error) {}
   const panelWaiters = new Map();
   onPanelResult((message) => {
     const id = message.id;

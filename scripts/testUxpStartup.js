@@ -153,7 +153,7 @@ function hostHarness({ readWebViewFolders } = {}) {
     os: { platform: () => 'win32', release: () => '10.0' },
     './panelStart': Object.assign({}, require('../uxp-src/host/panelStart'), readWebViewFolders ? { readWebViewFolders } : {}),
     fs: { readdir: async () => [] },
-    './photoshop': { methods: {} }, './smartPaste': { methods: {} }, './labelplus': { methods: {} },
+    './photoshop': { methods: {} }, './smartPaste': { methods: {} }, './labelplus': { methods: {} }, './sfx': { methods: {}, setup() {} },
     './files': { toUrl: path => path, createMirrorWriter: () => ({ flush: async () => { flushes++; } }) },
     './keyboard': { onChange() {} }, './keysHelper': {},
     './services': { requests: { count: () => ++calls, delayed: () => new Promise(resolve => { finishOldRequest = resolve; }) } }, './jsx': {},

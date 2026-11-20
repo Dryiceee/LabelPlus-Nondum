@@ -32,7 +32,7 @@ const readLocale = (relativePath) => {
 
 const defaultLocale = readLocale("locale/messages.properties");
 const defaultKeys = defaultLocale.keys;
-// Simplified Chinese is complete. The LabelPlus window and the page bar are
+// Simplified Chinese is complete. The LabelPlus window, the page bar and the SFX editor are
 // only translated into it: a key another locale lacks falls back to the
 // English text.
 const PARTIAL_LOCALES = [];
@@ -41,7 +41,7 @@ const PAGE_BAR_KEYS = [
   "settingsShortcutGroupPages", "settingsGroupPages", "settingsPageOpenAfterImport", "settingsPageOpenAfterImportHint",
   "settingsPageMaxOpen", "settingsPageMaxOpenHint",
 ];
-const isOptionalKey = (localeName, key) => PARTIAL_LOCALES.includes(localeName) || /^(lp|pageNav)[A-Z]/.test(key) || PAGE_BAR_KEYS.includes(key);
+const isOptionalKey = (localeName, key) => PARTIAL_LOCALES.includes(localeName) || /^(lp|pageNav|sfx)[A-Z]/.test(key) || PAGE_BAR_KEYS.includes(key);
 const localeNames = fs.readdirSync(path.resolve(rootDir, "locale"), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)

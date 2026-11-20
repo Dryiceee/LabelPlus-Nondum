@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- SFX editor (the lightning button at the bottom of the panel): lays out the selected Chinese text layer as a sound effect along a line, an arc or a hand-drawn path, with spacing, character rotation and first/last character sizes, and per-character move, rotate and resize. Apply replaces the text layer by one native shape layer in its place, drawn from Photoshop's own outlines of the font (holes kept); the fill colour and anchors stay editable in Photoshop. The settings are saved with the PSD in the layer's metadata, so the layer opens again in the editor. One undo reverts an Apply; Cancel leaves the document as it was.
+
 ## 1.1.1
 
 - Folder locks: every folder, Unsorted included, locks and unlocks from its header or its right-click menu. A locked folder keeps its styles: none can be deleted, edited or moved in or out.
