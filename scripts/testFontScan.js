@@ -121,4 +121,24 @@ assert.deepStrictEqual(plainGroup.effects, []);
 assert.deepStrictEqual(buildFontGroups([]), []);
 assert.deepStrictEqual(buildFontGroups(null), []);
 
+// A layer scaled with free transform counts at the size Photoshop shows: 8 pt
+// scaled by 2 is the same 16 as an unscaled 16 pt layer, leading included
+{
+  const scaled = (size, scale, extra = {}) => makeLayer([makeRun({ fontPostScriptName: "Scaled", size, leading: size * 1.2, autoLeading: false, ...extra })], { transform: { xx: scale, xy: 0, yx: 0, yy: scale, tx: 0, ty: 0 } });
+  const scanned = buildFontGroups([{
+    file: "scaled.psd",
+    layers: [scaled(8, 2), scaled(16, 1), scaled(10, 2), makeLayer([makeRun({ fontPostScriptName: "Scaled", size: 16, leading: 19.2, autoLeading: false })])],
+  }])[0];
+  assert.deepStrictEqual(scanned.sizes, [{ size: 16, count: 3 }, { size: 20, count: 1 }]);
+  assert.strictEqual(scanned.topSize, 16);
+  assert.strictEqual(scanned.textProps.layerText.textStyleRange[0].textStyle.leading, 19.2);
+  assert.ok(!("transform" in scanned.textProps.layerText));
+
+  // Implied sizes, when Photoshop gives them, win; the scanned runs stay as they were
+  const run = makeRun({ fontPostScriptName: "Implied", size: 18, impliedFontSize: 75.36690942939958 });
+  const implied = buildFontGroups([{ file: "implied.psd", layers: [makeLayer([run], { transform: { xx: 4.187, xy: 0, yx: 0, yy: 4.187 } })] }])[0];
+  assert.strictEqual(implied.topSize, 75.37);
+  assert.strictEqual(run.size, 18);
+}
+
 console.log("fontScan tests passed");

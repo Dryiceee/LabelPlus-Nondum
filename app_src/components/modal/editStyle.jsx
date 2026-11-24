@@ -34,6 +34,7 @@ import { pickFamilyPreviewFont } from "../../fontPreview";
 import UnsavedChangesDialog from "./unsavedChangesDialog";
 import LayerEffectsField from "./layerEffectsField";
 import { effectsFromLayer } from "../../labelplus/layerEffects";
+import { bakeLayerTransform } from "../../labelplus/layerStyle";
 
 const BUBBLE_TYPES = ["shout", "narration"];
 const PUNCTUATION_ONLY_SCALES = [2, 3];
@@ -132,10 +133,10 @@ const EditStyleModal = React.memo(function EditStyleModal() {
       firstParStyle.paragraphStyle.textEveryLineComposer = !!firstParStyle.paragraphStyle.textEveryLineComposer;
       data.textProps.layerText.paragraphStyleRange = [firstParStyle];
       data.textProps.layerText.textStyleRange = [firstTextStyle];
+      bakeLayerTransform(data.textProps.layerText);
       delete data.textProps.layerText.textKey;
       delete data.textProps.layerText.textShape;
       delete data.textProps.layerText.textClickPoint;
-      delete data.textProps.layerText.transform;
       delete data.textProps.layerText.boundingBox;
       delete data.textProps.layerText.bounds;
       delete data.textProps.layerText.warp;

@@ -1,7 +1,7 @@
 // A style from a text layer (app_src/labelplus/layerStyle.js). No Photoshop.
 const assert = require("assert");
 const load = require("./helpers/loadAppModule")();
-const { mixedLooks, styleFromLayer } = load("app_src/labelplus/layerStyle.js");
+const { bakeLayerTransform, mixedLooks, styleFromLayer } = load("app_src/labelplus/layerStyle.js");
 
 const run = (from, to, textStyle) => ({ from, to, textStyle });
 const look = { fontPostScriptName: "SourceHanSans-Bold", fontName: "思源黑体", size: 24, color: { red: 0, green: 0, blue: 0 } };
@@ -40,6 +40,30 @@ assert.strictEqual(mixedLooks({}), false);
   assert.strictEqual(style.name, "思源黑体 24");
   assert.deepStrictEqual(style.stroke, { enabled: true, size: 3 });
   assert.strictEqual(data.textProps.layerText.textKey, "你好！？", "the layer data is untouched");
+}
+
+// A layer scaled with free transform: the size Photoshop shows, not the stored one
+{
+  const data = layer([run(0, 4, { ...look, size: 18, leading: 20, autoLeading: false, baselineShift: 1 })]);
+  data.textProps.layerText.transform = { xx: 4.1872, xy: 0, yx: 0, yy: 4.1872, tx: 0, ty: 0 };
+  const style = styleFromLayer(data);
+  const textStyle = style.textProps.layerText.textStyleRange[0].textStyle;
+  assert.ok(!("transform" in style.textProps.layerText));
+  assert.strictEqual(textStyle.size, 75.3696);
+  assert.strictEqual(textStyle.leading, 83.744);
+  assert.strictEqual(textStyle.baselineShift, 4.1872);
+  assert.strictEqual(style.name, "思源黑体 75.4");
+  assert.strictEqual(data.textProps.layerText.textStyleRange[0].textStyle.size, 18, "the layer data is untouched");
+}
+
+// Implied values, when Photoshop gives them, are the shown ones
+{
+  const layerText = {
+    transform: { xx: 2, xy: 0, yx: 0, yy: 2 },
+    textStyleRange: [run(0, 2, { size: 10, impliedFontSize: 21, leading: 12, impliedLeading: 25 })],
+  };
+  bakeLayerTransform(layerText);
+  assert.deepStrictEqual(layerText.textStyleRange[0].textStyle, { size: 21, leading: 25 });
 }
 
 console.log("LabelPlus layer style tests passed");

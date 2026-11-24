@@ -5040,6 +5040,8 @@ function _collectDocumentFontData(doc) {
           typeUnit: textParams.typeUnit || "pixelsUnit",
           paragraphStyle: paragraphStyle,
           stroke: stroke,
+          // The runs hold sizes before this transform (app_src/fontScan.js)
+          transform: layerText.transform || null,
           runs: runs,
         });
       } catch (layerError) {}

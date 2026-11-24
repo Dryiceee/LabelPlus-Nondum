@@ -1,8 +1,11 @@
 import { effectsFromLayer } from "./labelplus/layerEffects";
+import { bakeLayerTransform } from "./labelplus/layerStyle";
 
 // FontScanR aggregation logic. Pure functions, no CEP dependency, unit-testable.
 // Input: results of host scanPsdFonts() calls, one per .psd file:
-//   {file, layers: [{layerName, antiAlias, typeUnit, paragraphStyle, stroke, layerEffects, runs: [textStyle]}]}
+//   {file, layers: [{layerName, antiAlias, typeUnit, paragraphStyle, stroke, layerEffects, transform, runs: [textStyle]}]}
+// The runs hold Photoshop's stored sizes, before the layer transform: they are
+// counted at the size the Character panel shows.
 // layerEffects is the layer's whole layerEffects descriptor: its effects other
 // than the stroke become the style's layer styles, as for a style made from
 // the selected layer.
@@ -122,7 +125,11 @@ const buildFontGroups = (fileResults) => {
       if (!layer || !Array.isArray(layer.runs)) return;
       const seenInLayer = new Set();
       const effects = effectsFromLayer(layer.layerEffects);
-      layer.runs.forEach((textStyle) => {
+      const shown = bakeLayerTransform({
+        transform: layer.transform || null,
+        textStyleRange: layer.runs.map((textStyle) => ({ textStyle: textStyle ? Object.assign({}, textStyle) : textStyle })),
+      }).textStyleRange.map((range) => range.textStyle);
+      shown.forEach((textStyle) => {
         if (!textStyle || (!textStyle.fontPostScriptName && !textStyle.fontName)) return;
         const key = getFontGroupKey(textStyle);
         const variantSig = getVariantSignature(textStyle, layer, effects);

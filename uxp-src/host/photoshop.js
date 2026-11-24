@@ -4007,6 +4007,8 @@ function _collectDocumentFontData() {
         paragraphStyle,
         stroke,
         layerEffects,
+        // The runs hold sizes before this transform (app_src/fontScan.js)
+        transform: layerText.transform || null,
         runs,
       });
     } catch (layerError) {}
