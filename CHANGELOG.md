@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2
+
+- SFX editor: several layers at once. Select text layers (or SFX layers made earlier) and click the lightning button: all of them open together. Each is drawn on the page; click one, or pick it from the layer list (PageUp / PageDown), to edit it. Each keeps its own settings and undo. Apply writes every layer in one history step, so one undo reverts them all; Cancel leaves them all as they were. Layers in the selection that are not text or SFX layers are left out, with a note in the editor.
+- A text layer scaled with free transform now gives the size the Character panel shows (75.4 pt, not the 18 pt Photoshop stores before the transform), leading and baseline shift included: in a style made from the layer, in the style editor and in FontScanR.
+
 ## 1.2.0
 
 - SFX editor (the lightning button at the bottom of the panel), modelled on TypeR Studio's SFX tool: lays out the selected Chinese text layer as a sound effect along a line, an arc or a hand-drawn path, with spacing, character rotation and first/last character sizes, and per-character move, rotate and resize.
