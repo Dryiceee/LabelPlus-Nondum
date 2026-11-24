@@ -7,6 +7,7 @@ const outline = load("app_src/sfx/outline.js");
 const layout = load("app_src/sfx/layout.js");
 const glyphs = load("app_src/sfx/glyphs.js");
 const payload = load("app_src/sfx/payload.js");
+const group = load("app_src/sfx/group.js");
 
 const near = (actual, expected, tolerance, message) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, (message || "") + " expected " + expected + " got " + actual);
@@ -358,6 +359,43 @@ const ring = (x, y, outer, inner) => {
   assert.strictEqual(payload.parsePayload("{\"v\":99,\"model\":{}}"), null, "newer payloads are refused");
   assert.strictEqual(payload.parsePayload("not json"), null);
   assert.strictEqual(payload.layerProperty(42.7), "layer42");
+}
+
+/* ------------------------- several layers -------------------------- */
+{
+  // targetLayersIDs come bottom to top; the editor lists them top first
+  assert.deepStrictEqual(group.selectionOrder([3, 7, 7, 12]), [12, 7, 3]);
+  assert.deepStrictEqual(group.selectionOrder([5, 0, -1, "x", 9]), [9, 5], "bad ids dropped");
+  assert.deepStrictEqual(group.selectionOrder(null), []);
+
+  // Layers that cannot open are left out; anything else stops the editor
+  ["notText", "emptyText", "noOutlines", "badPayload"].forEach((code) => assert.ok(group.isSkippable(code), code));
+  ["noDocument", "duplicate", "failed", undefined].forEach((code) => assert.ok(!group.isSkippable(code), String(code)));
+  assert.deepStrictEqual(group.skipNotice("图层 3", "notText"), { key: "sfxLayerSkipped", layer: "图层 3", reason: "notText" });
+
+  // A layer's notices name it only when several layers are open
+  assert.deepStrictEqual(group.layerNotices(["sfxWarpIgnored", { key: "sfxPathEdited", detail: "x" }], "砰", false),
+    [{ key: "sfxWarpIgnored" }, { key: "sfxPathEdited", detail: "x" }]);
+  assert.deepStrictEqual(group.layerNotices(["sfxWarpIgnored"], "砰", true), [{ key: "sfxWarpIgnored", layer: "砰" }]);
+
+  // The editor's models: one per layer; a missing one stays as it opened
+  const a = layout.initialModel({ text: "砰", em: 40, color: { r: 0, g: 0, b: 0 } });
+  const b = layout.initialModel({ text: "咚咚", em: 60, color: { r: 9, g: 9, b: 9 } });
+  const a2 = Object.assign({}, a, { rotation: 12 });
+  assert.deepStrictEqual(group.stateModels(null, [a, b]), [a, b]);
+  assert.deepStrictEqual(group.stateModels({ models: [a2] }, [a, b]), [a2, b]);
+  assert.deepStrictEqual(group.stateModels({ models: [null, a2] }, [a, b]), [a, a2]);
+  assert.deepStrictEqual(group.stateModels({ model: a2 }, [a]), [a2], "single-layer state");
+  assert.deepStrictEqual(group.stateModels({ model: a2 }, [a, b]), [a, b], "a single model is no answer for several layers");
+
+  assert.strictEqual(group.clampIndex(5, 3), 2);
+  assert.strictEqual(group.clampIndex(-1, 3), 0);
+  assert.strictEqual(group.clampIndex(undefined, 3), 0);
+  assert.strictEqual(group.clampIndex(1, 0), 0);
+
+  assert.strictEqual(group.firstEmpty([a, b]), -1);
+  assert.strictEqual(group.firstEmpty([a, Object.assign({}, b, { text: "" })]), 1);
+  assert.strictEqual(group.firstEmpty([null]), 0);
 }
 
 console.log("SFX tests passed");

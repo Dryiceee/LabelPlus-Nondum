@@ -5,7 +5,7 @@ import { locale, nativeAlert } from "../utils";
 
 const MESSAGES = {
   noDocument: ["sfxErrorNoDocument", "Open a document first."],
-  selectOne: ["sfxErrorSelectOne", "Select one text layer, or one SFX shape layer."],
+  selectOne: ["sfxErrorSelectOne", "Select a text layer, or an SFX shape layer (several are fine)."],
   notText: ["sfxErrorNotText", "Select a text layer, or an SFX shape layer made by the SFX editor."],
   emptyText: ["sfxErrorEmptyText", "The selected text layer is empty."],
   badPayload: ["sfxErrorBadPayload", "This layer's SFX settings were written by a newer version, or are damaged."],

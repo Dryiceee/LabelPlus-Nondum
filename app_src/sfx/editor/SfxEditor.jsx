@@ -1,6 +1,11 @@
 // SFX editor window (uxp/sfx, a WebView in a modal Photoshop dialog).
 // Everything is edited in document pixels; the page preview is drawn at the
 // document's size, so the zoom never moves the result.
+//
+// Several layers can be open at once (init.items, one per layer): all of
+// them are drawn on the page, the active one has the handles and the
+// controls, and a click on another (or the layer list) makes it active.
+// Each layer keeps its own model, glyph outlines and undo history.
 import React from "react";
 import {
   chars, layoutGlyphs, glyphMatrix, samplePath, pathEnds, moveEnd, bendTo, bendHandle,
@@ -9,6 +14,7 @@ import {
   bendWhole, bendStretch, stretchHandle, pathAnchors, moveHandle, moveAnchor, handleSegments, handlePoint,
 } from "../layout";
 import { toSvgPath, bounds as outlineBounds } from "../outline";
+import { clampIndex, firstEmpty } from "../group";
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const round = (value, digits = 0) => {
@@ -80,7 +86,34 @@ const FALLBACK = {
   sfxGlyphsFailed: "Photoshop could not read the new characters.",
   sfxModeNew: "New SFX from the text layer",
   sfxModeUpdate: "Editing an SFX layer",
+  sfxLayers: "Layers ({count})",
+  sfxLayerSkipped: "{layer} was left out: {reason}",
+  sfxSkipNotText: "not a text layer or an SFX layer",
+  sfxSkipEmptyText: "the text layer is empty",
+  sfxSkipNoOutlines: "Photoshop cannot turn its text into paths",
+  sfxSkipBadPayload: "its SFX settings are damaged or from a newer version",
+  sfxHelpLayersTitle: "Layers",
+  sfxHelpLayers: "Click another SFX=Edit it|PageUp / PageDown=Previous / next layer",
 };
+
+// init.items, or the single layer of an older init
+const editorItems = (init) => (Array.isArray(init.items) && init.items.length ? init.items
+  : [{ mode: init.mode, model: init.model, start: init.model, outlines: init.outlines, font: init.font, layerName: "" }]);
+
+// One cached value per object (a model, an outline set): layers that are not
+// being edited are not laid out again on every frame
+function useObjectCache(compute) {
+  const cache = React.useRef(null);
+  if (!cache.current) cache.current = new WeakMap();
+  return React.useCallback((key) => {
+    let value = cache.current.get(key);
+    if (value === undefined) {
+      value = compute(key);
+      cache.current.set(key, value);
+    }
+    return value;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
 
 function useStrings(strings) {
   return React.useCallback((key) => (strings && strings[key]) || FALLBACK[key] || key, [strings]);
@@ -157,8 +190,26 @@ function ShortcutHelp({ t, groups }) {
 export default function SfxEditor({ init, bridge }) {
   const t = useStrings(init.strings);
   const doc = init.document;
-  const [model, setModel] = React.useState(() => normalizeModel(init.model));
-  const [outlines, setOutlines] = React.useState(() => Object.assign({}, init.outlines));
+  const items = React.useMemo(() => editorItems(init), [init]);
+  const count = items.length;
+  const [active, setActive] = React.useState(() => clampIndex(init.active, items.length));
+  const activeRef = React.useRef(active);
+  activeRef.current = active;
+  const [models, setModels] = React.useState(() => items.map((item) => normalizeModel(item.model)));
+  const modelsRef = React.useRef(models);
+  modelsRef.current = models;
+  const model = models[active];
+  // The active layer's model (the layer is the one active when this is called)
+  const setModel = React.useCallback((next) => {
+    const index = activeRef.current;
+    setModels((list) => {
+      const copy = list.slice();
+      copy[index] = next;
+      return copy;
+    });
+  }, []);
+  const [outlineSets, setOutlineSets] = React.useState(() => items.map((item) => Object.assign({}, item.outlines)));
+  const outlines = outlineSets[active];
   // Selected characters: indices, in text order
   const [selected, setSelected] = React.useState([]);
   const [marquee, setMarquee] = React.useState(null);
@@ -170,9 +221,12 @@ export default function SfxEditor({ init, bridge }) {
   const [notices, setNotices] = React.useState(init.notices || []);
   const [loading, setLoading] = React.useState(false);
   const [stroke, setStroke] = React.useState(null);
-  const [textDraft, setTextDraft] = React.useState(init.model.text || "");
+  const [textDraft, setTextDraft] = React.useState(model.text || "");
   const [busy, setBusy] = React.useState(false);
-  const historyRef = React.useRef({ past: [], future: [], tag: null, time: 0 });
+  // One undo history per layer
+  const histories = React.useRef(null);
+  if (!histories.current) histories.current = items.map(() => ({ past: [], future: [], tag: null, time: 0 }));
+  const historyOf = () => histories.current[activeRef.current];
   const [, forceHistory] = React.useState(0);
   const svgRef = React.useRef(null);
   const stageRef = React.useRef(null);
@@ -186,7 +240,7 @@ export default function SfxEditor({ init, bridge }) {
   /* ----------------------------- history ----------------------------- */
 
   const remember = React.useCallback((before, tag) => {
-    const history = historyRef.current;
+    const history = historyOf();
     const now = Date.now();
     if (tag && tag === history.tag && now - history.time < 900) {
       history.time = now;
@@ -204,13 +258,14 @@ export default function SfxEditor({ init, bridge }) {
   const edit = React.useCallback((fn, tag) => {
     const before = modelRef.current;
     const next = fn(before);
-    if (!next || next === before) return;
+    if (!next || next === before) return before;
     remember(before, tag);
     setModel(next);
-  }, [remember]);
+    return next;
+  }, [remember, setModel]);
 
   const undo = React.useCallback(() => {
-    const history = historyRef.current;
+    const history = historyOf();
     if (!history.past.length) return;
     history.future.push(modelRef.current);
     const previous = history.past.pop();
@@ -218,10 +273,10 @@ export default function SfxEditor({ init, bridge }) {
     setModel(previous);
     setTextDraft(previous.text);
     forceHistory((n) => n + 1);
-  }, []);
+  }, [setModel]);
 
   const redo = React.useCallback(() => {
-    const history = historyRef.current;
+    const history = historyOf();
     if (!history.future.length) return;
     history.past.push(modelRef.current);
     const next = history.future.pop();
@@ -229,51 +284,80 @@ export default function SfxEditor({ init, bridge }) {
     setModel(next);
     setTextDraft(next.text);
     forceHistory((n) => n + 1);
-  }, []);
+  }, [setModel]);
 
   /* ------------------------------ glyphs ----------------------------- */
 
-  const outlinesRef = React.useRef(outlines);
-  outlinesRef.current = outlines;
-  const requested = React.useRef({});
+  const outlineSetsRef = React.useRef(outlineSets);
+  outlineSetsRef.current = outlineSets;
+  const requested = React.useRef(null);
+  if (!requested.current) requested.current = items.map(() => ({}));
 
-  const fetchGlyphs = React.useCallback((text) => {
-    const missing = chars(text).filter((ch) => !outlinesRef.current[ch] && !requested.current[ch]);
+  // Where the editor is, for the host to open it again there
+  const editorState = () => ({ models: modelsRef.current, active: activeRef.current, view: viewRef.current });
+
+  // The outlines of a layer's characters still missing (the layer's own font)
+  const fetchGlyphs = React.useCallback((text, at) => {
+    const index = at === undefined ? activeRef.current : at;
+    const have = outlineSetsRef.current[index] || {};
+    const asked = requested.current[index];
+    const missing = chars(text).filter((ch) => !have[ch] && !asked[ch]);
     if (!missing.length) return;
-    missing.forEach((ch) => { requested.current[ch] = true; });
+    missing.forEach((ch) => { asked[ch] = true; });
     setLoading(true);
-    bridge.request("glyphs", missing).then((added) => {
-      setOutlines((current) => Object.assign({}, current, added || {}));
+    bridge.request("glyphs", missing, index).then((added) => {
+      setOutlineSets((list) => {
+        const copy = list.slice();
+        copy[index] = Object.assign({}, list[index], added || {});
+        return copy;
+      });
       setLoading(false);
     }, (error) => {
       setLoading(false);
-      missing.forEach((ch) => { delete requested.current[ch]; });
+      missing.forEach((ch) => { delete asked[ch]; });
       // Photoshop refused a command while this window is up: the host closes
       // it, reads the characters and opens it again where it was
-      if (error && error.modal) bridge.reopen({ model: modelRef.current, view: viewRef.current }, missing);
+      if (error && error.modal) bridge.reopen(editorState(), missing, index);
       else setNotices((list) => list.concat([{ key: "sfxGlyphsFailed", detail: String(error && error.message || error) }]));
     });
-  }, [bridge]);
+  }, [bridge]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  React.useEffect(() => { fetchGlyphs(model.text); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => { fetchGlyphs(modelsRef.current[active].text, active); }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const textTimer = React.useRef(null);
+  const textDraftRef = React.useRef(textDraft);
+  textDraftRef.current = textDraft;
+  // New characters keep the spacing: the path grows around its middle
+  const commitText = (value) => {
+    const next = edit((m) => (m.text === value ? m : withTracking(withText(m, value), trackingOf(m))), "text");
+    setSelected((list) => list.filter((index) => index < chars(value).length));
+    fetchGlyphs(value);
+    return next;
+  };
   const onTextChange = (value) => {
     setTextDraft(value);
+    textDraftRef.current = value;
     clearTimeout(textTimer.current);
     textTimer.current = setTimeout(() => {
-      // New characters keep the spacing: the path grows around its middle
-      edit((m) => (m.text === value ? m : withTracking(withText(m, value), trackingOf(m))), "text");
-      setSelected((list) => list.filter((index) => index < chars(value).length));
-      fetchGlyphs(value);
+      textTimer.current = null;
+      commitText(value);
     }, 250);
   };
+  // A text edit still waiting for its timer, made now (before the layer
+  // changes, or Apply); the model it made, or null
+  const flushText = () => {
+    if (!textTimer.current) return null;
+    clearTimeout(textTimer.current);
+    textTimer.current = null;
+    return commitText(textDraftRef.current) || null;
+  };
 
-  const svgPaths = React.useMemo(() => {
+  const svgPathsOf = useObjectCache((set) => {
     const result = {};
-    Object.keys(outlines).forEach((ch) => { result[ch] = toSvgPath(outlines[ch]); });
+    Object.keys(set || {}).forEach((ch) => { result[ch] = toSvgPath(set[ch]); });
     return result;
-  }, [outlines]);
+  });
+  const svgPaths = svgPathsOf(outlines);
 
   const glyphBoxes = React.useMemo(() => {
     const result = {};
@@ -286,7 +370,9 @@ export default function SfxEditor({ init, bridge }) {
     return result;
   }, [outlines, model.em]);
 
-  const placements = React.useMemo(() => layoutGlyphs(model), [model]);
+  const layoutOf = useObjectCache((m) => layoutGlyphs(m));
+  const guideOf = useObjectCache((m) => samplePath(m.path, 48));
+  const placements = layoutOf(model);
   const guide = React.useMemo(() => samplePath(model.path, 96), [model.path]);
   const tracking = React.useMemo(() => trackingOf(model), [model]);
 
@@ -601,7 +687,6 @@ export default function SfxEditor({ init, bridge }) {
         return;
       }
       const selection = selectedRef.current;
-      const count = list.length;
       if (event.key === "Escape") {
         event.preventDefault();
         if (tool === "draw") setTool("edit");
@@ -609,13 +694,20 @@ export default function SfxEditor({ init, bridge }) {
         else setSelected([]);
         return;
       }
-      if (event.key === "Tab" && count) {
+      if ((event.key === "PageUp" || event.key === "PageDown") && modelsRef.current.length > 1) {
+        event.preventDefault();
+        const layers = modelsRef.current.length;
+        switchRef.current((activeRef.current + (event.key === "PageUp" ? -1 : 1) + layers) % layers);
+        return;
+      }
+      const length = list.length;
+      if (event.key === "Tab" && length) {
         event.preventDefault();
         const step = event.shiftKey ? -1 : 1;
-        const current = selection.length ? selection[step > 0 ? selection.length - 1 : 0] : (step > 0 ? -1 : count);
+        const current = selection.length ? selection[step > 0 ? selection.length - 1 : 0] : (step > 0 ? -1 : length);
         let next = current;
-        for (let n = 0; n < count; n++) {
-          next = (next + step + count) % count;
+        for (let n = 0; n < length; n++) {
+          next = (next + step + length) % length;
           if (!isBlank(list[next])) break;
         }
         setSelected([next]);
@@ -667,22 +759,55 @@ export default function SfxEditor({ init, bridge }) {
 
   /* ------------------------------ actions ---------------------------- */
 
+  // Another layer on the controls; the page view stays where it is
+  const switchTo = (index) => {
+    const next = clampIndex(index, count);
+    if (next === activeRef.current || dragRef.current) return;
+    flushText();
+    activeRef.current = next;
+    setActive(next);
+    setSelected([]);
+    setAnchorPick(null);
+    setTool("edit");
+    setTextDraft(modelsRef.current[next].text || "");
+  };
+  const switchRef = React.useRef(switchTo);
+  switchRef.current = switchTo;
+
+  // A click on a layer that is not active makes it active (Space or the
+  // middle button still pan)
+  const pickLayer = (event, index) => {
+    if (event.button === 1 || spaceRef.current) {
+      startDrag(event, "empty");
+      return;
+    }
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    switchTo(index);
+  };
+
+  // Every layer's model goes back, one per layer
   const apply = () => {
     if (busy) return;
-    const m = modelRef.current;
-    if (!chars(m.text).length) {
-      setNotices([{ key: "sfxEmptyText" }]);
+    const list = modelsRef.current.slice();
+    const flushed = flushText();
+    if (flushed) list[activeRef.current] = flushed;
+    const empty = firstEmpty(list);
+    if (empty >= 0) {
+      switchTo(empty);
+      setNotices([count > 1 ? { key: "sfxEmptyText", layer: items[empty].layerName } : { key: "sfxEmptyText" }]);
       return;
     }
     setBusy(true);
-    bridge.apply({ model: m, view: viewRef.current });
+    bridge.apply({ models: list, active: activeRef.current, view: viewRef.current });
   };
   const applyRef = React.useRef(apply);
   applyRef.current = apply;
 
   // Every adjustment undone: a straight line where the SFX started
   const resetEverything = () => {
-    const start = normalizeModel(init.model);
+    const start = normalizeModel(items[active].start || items[active].model);
     edit((m) => resetLayout(m, { center: pathMidpoint(start.path), vertical: start.upright }));
     setSelected([]);
   };
@@ -735,14 +860,30 @@ export default function SfxEditor({ init, bridge }) {
     return { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), width: Math.abs(a[0] - b[0]), height: Math.abs(a[1] - b[1]) };
   })() : null;
 
+  // {key, detail?, layer?, reason?}: a layer's notice names it when several are open
   const noticeText = (notice) => {
-    const key = typeof notice === "string" ? notice : notice.key;
-    const detail = typeof notice === "object" && notice.detail ? " (" + notice.detail + ")" : "";
-    return t(key) + detail;
+    if (typeof notice === "string") return t(notice);
+    let text = t(notice.key);
+    if (notice.reason) text = text.replace("{reason}", t("sfxSkip" + notice.reason.charAt(0).toUpperCase() + notice.reason.slice(1)));
+    if (text.indexOf("{layer}") >= 0) text = text.replace("{layer}", notice.layer || "");
+    else if (notice.layer) text = notice.layer + ": " + text;
+    return text + (notice.detail ? " (" + notice.detail + ")" : "");
   };
 
-  const canUndo = historyRef.current.past.length > 0;
-  const canRedo = historyRef.current.future.length > 0;
+  const item = items[active];
+  // Development builds: what the live check reads and does in the window
+  if (process.env.TYPER_DEV === "1" && typeof window !== "undefined") {
+    window.__sfxDev = {
+      state: () => ({ count, active: activeRef.current, texts: modelsRef.current.map((m) => m.text), layers: items.map((entry) => entry.layerName),
+        modes: items.map((entry) => entry.mode), rotations: modelsRef.current.map((m) => m.rotation), notices: notices.map(noticeText) }),
+      switchTo: (index) => { switchRef.current(index); return true; },
+      rotate: (degrees) => { edit((m) => Object.assign({}, m, { rotation: degrees })); return true; },
+      apply: () => { applyRef.current(); return true; },
+      cancel: () => { bridge.cancel(); return true; },
+    };
+  }
+  const canUndo = historyOf().past.length > 0;
+  const canRedo = historyOf().future.length > 0;
   const selectionTitle = selected.length === 1 && single ? t("sfxSelected") + " · " + single.ch
     : selected.length > 1 ? t("sfxSelectedMany").replace("{count}", String(selected.length)) : t("sfxSelected");
 
@@ -764,6 +905,15 @@ export default function SfxEditor({ init, bridge }) {
             {init.preview ? (
               <image href={init.preview.src} x="0" y="0" width={doc.width} height={doc.height} preserveAspectRatio="none" />
             ) : null}
+            {models.map((m, i) => (i === active ? null : (
+              <g key={"layer" + i} className="sfx-other">
+                {layoutOf(m).map((placement) => {
+                  const d = svgPathsOf(outlineSets[i])[placement.ch];
+                  if (!d) return null;
+                  return <path key={placement.index} d={d} fill={toHex(m.color)} fillRule="nonzero" transform={"matrix(" + glyphMatrix(placement, m.em).join(" ") + ")"} />;
+                })}
+              </g>
+            )))}
             {placements.map((placement) => {
               const d = svgPaths[placement.ch];
               if (!d) return null;
@@ -774,6 +924,21 @@ export default function SfxEditor({ init, bridge }) {
           {/* The path line moves the SFX, but a character on it takes the click */}
           <polyline points={guidePoints} className="sfx-guide-hit" onPointerDown={(event) => startDrag(event, "guide")} />
           <g transform={"translate(" + v.x + " " + v.y + ") scale(" + v.zoom + ")"}>
+            {models.map((m, i) => (i === active ? null : layoutOf(m).map((placement) => {
+              if (isBlank(placement.ch)) return null;
+              const half = m.em / 2;
+              return (
+                <rect
+                  key={"other" + i + "-" + placement.index}
+                  className="sfx-other-hit"
+                  x={-half} y={-half} width={m.em} height={m.em}
+                  transform={"matrix(" + glyphMatrix(placement, m.em).join(" ") + ")"}
+                  onPointerDown={(event) => pickLayer(event, i)}
+                >
+                  <title>{items[i].layerName || m.text}</title>
+                </rect>
+              );
+            })))}
             {placements.map((placement) => {
               // A space keeps its room on the path, but has nothing to show or pick
               if (isBlank(placement.ch)) return null;
@@ -791,6 +956,9 @@ export default function SfxEditor({ init, bridge }) {
             })}
           </g>
           <g className="sfx-overlay">
+            {models.map((m, i) => (i === active ? null : (
+              <polyline key={"guide" + i} className="sfx-guide sfx-guide-other" points={guideOf(m).map((p) => toScreen(p).map((n) => round(n, 1)).join(",")).join(" ")} />
+            )))}
             <polyline points={guidePoints} className="sfx-guide" />
             {stroke ? <polyline points={strokePoints} className="sfx-stroke" /> : null}
             {quads.length ? (
@@ -864,13 +1032,29 @@ export default function SfxEditor({ init, bridge }) {
           {loading ? <span className="sfx-loading">{t("sfxLoadingGlyphs")}</span> : null}
         </div>
         </div>
-        <ShortcutHelp t={t} groups={tool === "draw" ? ["Draw"] : (selected.length ? ["Selection", "Keys"] : ["Canvas", "Path"]).concat(anchors.length || handleList.length ? ["Curve"] : [])} />
+        <ShortcutHelp t={t} groups={tool === "draw" ? ["Draw"] : (selected.length ? ["Selection", "Keys"] : ["Canvas", "Path"]).concat(anchors.length || handleList.length ? ["Curve"] : []).concat(count > 1 ? ["Layers"] : [])} />
       </div>
 
       <aside className="sfx-side">
         <div className="sfx-side-scroll">
-          <div className="sfx-mode">{t(init.mode === "update" ? "sfxModeUpdate" : "sfxModeNew")}</div>
-          {init.font && init.font.name ? <div className="sfx-font">{t("sfxFont")}: {init.font.name}{init.font.style ? " " + init.font.style : ""}</div> : null}
+          {count > 1 ? (
+            <div className="sfx-layers">
+              <div className="sfx-group-title">{t("sfxLayers").replace("{count}", String(count))}</div>
+              {items.map((entry, i) => (
+                <button
+                  key={i} type="button" title={entry.layerName}
+                  className={"sfx-layer" + (i === active ? " is-active" : "")}
+                  onClick={() => switchTo(i)}
+                >
+                  <span className="sfx-layer-swatch" style={{ background: toHex(models[i].color) }} />
+                  <span className="sfx-layer-text">{models[i].text || entry.layerName}</span>
+                  {entry.layerName && entry.layerName !== models[i].text ? <span className="sfx-layer-name">{entry.layerName}</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="sfx-mode">{t(item.mode === "update" ? "sfxModeUpdate" : "sfxModeNew")}</div>
+          {item.font && item.font.name ? <div className="sfx-font">{t("sfxFont")}: {item.font.name}{item.font.style ? " " + item.font.style : ""}</div> : null}
 
           <label className="sfx-field sfx-field-text">
             <span className="sfx-field-label">{t("sfxText")}</span>

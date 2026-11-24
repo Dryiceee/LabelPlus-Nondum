@@ -3,6 +3,8 @@
 //   sfxOpen  - the panel's "SFX editor" button. The selected text layer (or
 //              an SFX shape layer made earlier) opens in a large modal window
 //              (uxp/sfx, a WebView); Apply writes one native shape layer.
+//              With several layers selected, all of them open together
+//              (one session each) and Apply writes each, in one undo step.
 //
 // Photoshop draws the glyphs itself: each character is typed into a copy of
 // the source text layer and turned into a work path (Type > Create Work
@@ -18,6 +20,7 @@ const { normalizeGlyphs, matchScale, REFERENCE_CHAR } = require("../../app_src/s
 const { buildPathContents, parsePathContents, bounds, unitFactor, UNIT_DISTANCE } = require("../../app_src/sfx/outline");
 const { initialModel, normalizeModel, composeShape, chars, translatePath } = require("../../app_src/sfx/layout");
 const { buildPayload, parsePayload, readXmpData, writeXmpData, shapeSignature, layerProperty: documentProperty } = require("../../app_src/sfx/payload");
+const { isSkippable, selectionOrder, skipNotice, layerNotices, stateModels, clampIndex } = require("../../app_src/sfx/group");
 
 const host = photoshop._internals;
 const { play, get, modal } = host;
@@ -275,17 +278,17 @@ async function inHistory(context, documentID, name, fn, { rollback = false } = {
 
 const PREVIEW_MAX = 2400;
 
-// The page without the SFX's own layer, as a JPEG data URL. Runs in a
+// The page without the SFX's own layers, as a JPEG data URL. Runs in a
 // rolled back history suspension. The layer is taken out by opacity, not
 // hidden: a visibility change is no history step, so Photoshop writes it
 // into the current history state, and undo/redo brought the layer back
 // hidden (the text layer after undoing an Apply, the SFX after a redo)
-async function capturePreview(info, hideId) {
-  if (hideId) {
+async function capturePreview(info, hideIds) {
+  [].concat(hideIds || []).forEach((id) => {
     try {
-      play({ _obj: "set", _target: [layerRef(hideId)], to: { _obj: "layer", opacity: { _unit: "percentUnit", _value: 0 } } });
+      play({ _obj: "set", _target: [layerRef(id)], to: { _obj: "layer", opacity: { _unit: "percentUnit", _value: 0 } } });
     } catch (error) {}
-  }
+  });
   const k = Math.min(1, PREVIEW_MAX / Math.max(info.width, info.height));
   const options = { documentID: info.id, componentSize: 8, applyAlpha: true, colorSpace: "RGB" };
   if (k < 1) options.targetSize = { width: Math.max(1, Math.round(info.width * k)), height: Math.max(1, Math.round(info.height * k)) };
@@ -387,18 +390,10 @@ function rawSize(textStyle) {
 
 // A copy of the source text layer, horizontal and unwarped, measures the
 // characters of a new SFX
-async function readFromTextLayer(info, layer, wanted, withPreview) {
+async function readFromTextLayer(info, layer, wanted) {
   const id = layer.id;
   const textKey = textKeyOf(id);
   if (!textKey) throw new SfxError("notText");
-  let preview = null;
-  if (withPreview) {
-    try {
-      preview = await capturePreview(info, id);
-    } catch (error) {
-      console.error("SFX: preview", error);
-    }
-  }
   selectLayer(id);
   play({ _obj: "duplicate", _target: [layerRef(id)], version: 5 });
   const copyId = host._getActiveLayerId();
@@ -445,7 +440,7 @@ async function readFromTextLayer(info, layer, wanted, withPreview) {
     typeUnit = simple && simple.typeUnit;
     simpleStyle = simple && simple.layerText.textStyleRange && simple.layerText.textStyleRange[0].textStyle;
   } catch (error) {}
-  return { textKey, textStyle, simpleStyle, typeUnit, vertical, normalized, preview, sizePt, notices, warped: !!(warp && warp !== "warpNone") };
+  return { textKey, textStyle, simpleStyle, typeUnit, vertical, normalized, sizePt, notices, warped: !!(warp && warp !== "warpNone") };
 }
 
 // A later edit: new characters typed in a temporary layer with the stored
@@ -469,18 +464,72 @@ async function readWithStoredFont(info, font, wanted) {
 
 /* ------------------------------ session ----------------------------- */
 
-// Everything the editor and Apply need, read once when the window opens
-async function startSession() {
-  const info = documentInfo();
-  const layers = info.doc.activeLayers;
-  if (!layers || layers.length !== 1) throw new SfxError("selectOne");
-  const layer = layers[0];
+// The selected layers' IDs, top first. ActionManager: the DOM's activeLayers
+// collapses a multi-layer selection.
+function selectedLayerIds(info) {
+  try {
+    const result = get([{ _property: "targetLayersIDs" }, TARGET_DOCUMENT]);
+    if (Array.isArray(result.targetLayersIDs)) return selectionOrder(result.targetLayersIDs.map((reference) => reference._id));
+  } catch (error) {}
+  return selectionOrder((info.doc.activeLayers || []).map((layer) => layer.id).reverse());
+}
+
+// One layer's session: a text layer (new SFX) or an SFX shape layer (update)
+async function startLayerSession(info, id) {
+  const layer = findLayer(info.doc, id);
+  if (!layer) throw new SfxError("notText");
   const stored = readPayloadText(layer.id);
   const payload = stored ? parsePayload(stored.text) : null;
   if (stored && !payload) throw new SfxError("badPayload");
   if (payload) return startUpdateSession(info, layer, payload);
   if (layer.kind !== "text" && layer.kind !== ps.constants.LayerKind.TEXT) throw new SfxError("notText");
   return startNewSession(info, layer);
+}
+
+// The page without the layers being edited, for the editor's backdrop
+async function readPreview(info, ids) {
+  try {
+    return await modal(COMMAND, (context) => inHistory(context, info.id, "SFX preview", () => capturePreview(info, ids), { rollback: true }));
+  } catch (error) {
+    console.error("SFX: preview", error);
+    return null;
+  }
+}
+
+// Everything the editor and Apply need, read once when the window opens:
+// one session per selected layer. In a selection of several layers, the
+// ones that are no text (or SFX) layer are left out with a notice.
+async function startGroup() {
+  const info = documentInfo();
+  const ids = selectedLayerIds(info);
+  if (!ids.length) throw new SfxError("selectOne");
+  const sessions = [];
+  const skipped = [];
+  for (const id of ids) {
+    try {
+      sessions.push(await startLayerSession(info, id));
+    } catch (error) {
+      if (ids.length === 1 || !(error instanceof SfxError) || !isSkippable(error.code)) throw error;
+      const layer = findLayer(info.doc, id);
+      skipped.push({ id, name: layer ? layer.name : String(id), code: error.code });
+    }
+  }
+  if (!sessions.length) throw new SfxError(skipped.every((entry) => entry.code === skipped[0].code) ? skipped[0].code : "notText");
+  const preview = await readPreview(info, sessions.map((session) => session.layerId));
+  const labelled = sessions.length > 1;
+  const notices = skipped.map((entry) => skipNotice(entry.name, entry.code));
+  sessions.forEach((session) => layerNotices(session.notices, session.layerName, labelled).forEach((notice) => notices.push(notice)));
+  return { docId: info.id, sessions, preview, skipped, notices };
+}
+
+// The selected layer alone (development builds and the live check)
+async function startSession() {
+  const info = documentInfo();
+  const ids = selectedLayerIds(info);
+  if (ids.length !== 1) throw new SfxError("selectOne");
+  const session = await startLayerSession(info, ids[0]);
+  session.preview = await readPreview(info, [session.layerId]);
+  return session;
 }
 
 async function startNewSession(info, layer) {
@@ -490,7 +539,7 @@ async function startNewSession(info, layer) {
     const text = String((textKey && textKey.textKey) || "");
     const wanted = uniqueChars(text);
     if (!wanted.length) throw new SfxError("emptyText");
-    const result = await readFromTextLayer(info, layer, wanted, true);
+    const result = await readFromTextLayer(info, layer, wanted);
     result.text = text;
     return result;
   }, { rollback: true }));
@@ -509,7 +558,6 @@ async function startNewSession(info, layer) {
     layerName: layer.name,
     model,
     outlines: read.normalized.outlines,
-    preview: read.preview,
     unit: { unit: read.normalized.unit, factor: read.normalized.factor, resolution: info.resolution },
     font: {
       postScriptName: read.textStyle && read.textStyle.fontPostScriptName,
@@ -545,11 +593,6 @@ async function startUpdateSession(info, layer, payload) {
       } else notices.push("sfxPathEdited");
     }
   } else if (!mask) notices.push("sfxNoVectorMask");
-  const preview = await modal(COMMAND, (context) => inHistory(context, info.id, "SFX preview", () => capturePreview(info, layer.id), { rollback: true }))
-    .catch((error) => {
-      console.error("SFX: preview", error);
-      return null;
-    });
   return {
     mode: "update",
     docId: info.id,
@@ -558,7 +601,6 @@ async function startUpdateSession(info, layer, payload) {
     autoName: payload.layerName,
     model,
     outlines: Object.assign({}, payload.outlines),
-    preview,
     unit,
     font: payload.font || {},
     notices,
@@ -591,7 +633,7 @@ async function addGlyphs(session, wanted) {
     if (session.mode === "new") {
       const layer = info.doc.layers && findLayer(info.doc, session.layerId);
       if (!layer) throw new SfxError("sourceGone");
-      const result = await readFromTextLayer(info, layer, missing, false);
+      const result = await readFromTextLayer(info, layer, missing);
       return result.normalized;
     }
     return readWithStoredFont(info, session.font, missing);
@@ -683,32 +725,59 @@ function payloadFor(session, model, id, components, layerName) {
   return JSON.stringify(buildPayload({ model, outlines: session.outlines, font, shape: storedSignature(id, session, components), layerName }));
 }
 
-async function applySession(session, rawModel) {
+// The SFX layers selected after Apply, as the source layers were
+function selectLayers(ids) {
+  selectLayer(ids[0]);
+  ids.slice(1).forEach((id) => {
+    try {
+      play({ _obj: "select", _target: [layerRef(id)], selectionModifier: { _enum: "selectionModifierType", _value: "addToSelection" }, makeVisible: false });
+    } catch (error) {}
+  });
+}
+
+// Every layer of the group written in one history state: one undo brings
+// all of them back, and any error leaves the document as it was
+async function applyGroup(group, rawModels) {
   const info = documentInfo();
-  if (info.id !== session.docId) throw new SfxError("documentChanged");
-  const model = normalizeModel(rawModel, session.model);
-  const components = composeShape(model, session.outlines);
-  if (!components.length) throw new SfxError("emptyShape");
-  const pathContents = buildPathContents(components, session.unit.unit, writeFactor(session.unit, info.resolution));
-  const name = autoLayerName(model);
-  let resultId = null;
+  if (info.id !== group.docId) throw new SfxError("documentChanged");
+  const wanted = stateModels({ models: rawModels }, group.sessions.map((session) => session.model));
+  const plans = group.sessions.map((session, i) => {
+    if (info.id !== session.docId) throw new SfxError("documentChanged");
+    const model = normalizeModel(wanted[i], session.model);
+    const components = composeShape(model, session.outlines);
+    if (!components.length) throw new SfxError("emptyShape", session.layerName);
+    const pathContents = buildPathContents(components, session.unit.unit, writeFactor(session.unit, info.resolution));
+    return { session, model, components, pathContents, name: autoLayerName(model), resultId: null };
+  });
   await modal(COMMAND, (context) => inHistory(context, info.id, (getStrings().sfxHistoryName || "SFX"), async () => {
     const savedWorkPath = readWorkPath();
-    selectLayer(session.layerId);
-    setWorkPath(pathContents);
-    testFailure("afterWorkPath");
-    if (session.mode === "new") resultId = applyNew(session, model, components, name);
-    else resultId = applyUpdate(session, model, components, name, pathContents);
+    plans.forEach((plan, i) => {
+      const { session, model, components, pathContents, name } = plan;
+      selectLayer(session.layerId);
+      setWorkPath(pathContents);
+      testFailure("afterWorkPath");
+      if (session.mode === "new") plan.resultId = applyNew(session, model, components, name);
+      else plan.resultId = applyUpdate(session, model, components, name, pathContents);
+      if (i === 0 && plans.length > 1) testFailure("betweenLayers");
+    });
     testFailure("beforeRestore");
     restoreWorkPath(savedWorkPath);
-    selectLayer(resultId);
+    selectLayers(plans.map((plan) => plan.resultId));
   }));
-  session.layerId = resultId;
-  session.mode = "update";
-  session.autoName = name;
-  session.model = model;
+  // Applied: the editor's next round (an apply failure reopens it) edits the SFX layers
+  plans.forEach(({ session, model, name, resultId }) => {
+    session.layerId = resultId;
+    session.mode = "update";
+    session.autoName = name;
+    session.model = model;
+  });
   onDocumentChanged();
-  return { layerId: resultId, bounds: bounds(components, true) };
+  return plans.map((plan) => ({ layerId: plan.resultId, bounds: bounds(plan.components, true) }));
+}
+
+async function applySession(session, rawModel) {
+  const [done] = await applyGroup({ docId: session.docId, sessions: [session] }, [rawModel]);
+  return done;
 }
 
 function applyNew(session, model, components, name) {
@@ -753,17 +822,26 @@ function applyUpdate(session, model, components, name, pathContents) {
 
 /* ------------------------------ window ------------------------------ */
 
-function editorInit(session, notices, extra) {
-  return Object.assign({
-    mode: session.mode,
-    model: session.model,
-    outlines: session.outlines,
-    preview: session.preview,
+// One entry per layer (`start`: the model the layer opened with, for the
+// editor's reset); `state` is where the editor was when it closed
+function editorInit(group, notices, state) {
+  const models = stateModels(state, group.sessions.map((session) => session.model));
+  return {
+    items: group.sessions.map((session, i) => ({
+      mode: session.mode,
+      model: models[i],
+      start: session.model,
+      outlines: session.outlines,
+      layerName: session.layerName || "",
+      font: { name: session.font.name || session.font.postScriptName || "", style: session.font.style || "" },
+    })),
+    active: clampIndex(state && state.active, group.sessions.length),
+    view: (state && state.view) || null,
+    preview: group.preview,
     document: (() => {
       const info = documentInfo();
       return { width: info.width, height: info.height, resolution: info.resolution };
     })(),
-    font: { name: session.font.name || session.font.postScriptName || "", style: session.font.style || "" },
     notices,
     strings: sfxStrings(),
     theme: (() => {
@@ -773,7 +851,7 @@ function editorInit(session, notices, extra) {
         return "darkest";
       }
     })(),
-  }, extra || {});
+  };
 }
 
 // The editor window. Resolves with {action: "apply" | "cancel" | "reopen", ...}
@@ -798,7 +876,7 @@ function showEditor(init, handlers) {
     let closed = false;
     const seen = new Set();
     // Development builds: the live check watches the window (scripts/sfxLiveCheck.js)
-    const devLog = typeof TYPER_DEV !== "undefined" && TYPER_DEV ? (globalThis.__sfxEditor = { dialog, view, log: [], finish: (result) => finish(result) }).log : null;
+    const devLog = typeof TYPER_DEV !== "undefined" && TYPER_DEV ? (globalThis.__sfxEditor = { dialog, view, log: [], finish: (result) => finish(result), post: (message) => send(message) }).log : null;
     const send = (message) => {
       try {
         view.postMessage(JSON.stringify(message));
@@ -823,11 +901,11 @@ function showEditor(init, handlers) {
         }
       }
       if (!message || typeof message !== "object" || closed) return;
-      if (devLog) devLog.push(message.type + (message.method ? ":" + message.method : ""));
+      if (devLog) devLog.push(message.type === "devResult" ? { op: message.op, result: message.result } : message.type + (message.method ? ":" + message.method : ""));
       if (message.type === "ready") send({ type: "init", init });
       else if (message.type === "apply") finish({ action: "apply", state: message.state });
       else if (message.type === "cancel") finish({ action: "cancel" });
-      else if (message.type === "reopen") finish({ action: "reopen", state: message.state, chars: message.chars || [] });
+      else if (message.type === "reopen") finish({ action: "reopen", state: message.state, chars: message.chars || [], index: message.index });
       else if (message.type === "log") console.log("SFX editor:", message.text);
       else if (message.type === "request" && typeof message.id === "number" && !seen.has(message.id)) {
         seen.add(message.id);
@@ -871,15 +949,15 @@ async function sfxOpen() {
   try {
     if (!canShowWindow()) throw new SfxError("noPanel");
     if (!host.hasDocument()) throw new SfxError("noDocument");
-    const session = await startSession();
-    let notices = session.notices.slice();
+    const group = await startGroup();
+    const sessionAt = (index) => group.sessions[clampIndex(index, group.sessions.length)];
+    let notices = group.notices.slice();
     let state = null;
     for (;;) {
-      const extra = state ? { model: state.model, view: state.view } : null;
-      const result = await showEditor(editorInit(session, notices, extra), {
+      const result = await showEditor(editorInit(group, notices, state), {
         // Photoshop may refuse commands while the window is up: any failure
         // here closes it, reads the characters, and opens it again
-        glyphs: (wanted) => addGlyphs(session, Array.isArray(wanted) ? wanted : []).catch((error) => {
+        glyphs: (wanted, index) => addGlyphs(sessionAt(index), Array.isArray(wanted) ? wanted : []).catch((error) => {
           const reopen = new Error(errorText(error));
           reopen.reopen = true;
           throw reopen;
@@ -890,7 +968,7 @@ async function sfxOpen() {
       state = result.state || state;
       if (result.action === "reopen") {
         try {
-          await addGlyphs(session, result.chars);
+          await addGlyphs(sessionAt(result.index), result.chars);
         } catch (error) {
           notices.push({ key: "sfxGlyphsFailed", detail: errorText(error) });
         }
@@ -898,8 +976,8 @@ async function sfxOpen() {
       }
       if (result.action === "apply") {
         try {
-          const done = await applySession(session, state && state.model);
-          return answer({ ok: true, code: "applied", layerId: done.layerId });
+          const done = await applyGroup(group, stateModels(state, group.sessions.map((session) => session.model)));
+          return answer({ ok: true, code: "applied", layerId: done[0].layerId, layerIds: done.map((entry) => entry.layerId) });
         } catch (error) {
           console.error("SFX: apply", error);
           notices.push({ key: "sfxApplyFailed", detail: errorText(error) });
@@ -918,5 +996,5 @@ module.exports = {
   setup,
   methods: { sfxOpen },
   // development builds and tests (scripts/sfxLiveCheck.js)
-  _internals: { opacityPercent, startSession, applySession, addGlyphs, readPayloadText, readLayerXmp, readDocumentXmp, readVectorMask, readWorkPath, layerBounds, capturePreview, fillColor },
+  _internals: { opacityPercent, startSession, startGroup, applySession, applyGroup, editorInit, addGlyphs, readPayloadText, readLayerXmp, readDocumentXmp, readVectorMask, readWorkPath, layerBounds, capturePreview, fillColor },
 };

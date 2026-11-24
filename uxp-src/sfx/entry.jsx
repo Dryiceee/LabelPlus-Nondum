@@ -31,7 +31,7 @@ const bridge = {
   },
   apply(state) { send({ type: "apply", state }); },
   cancel() { send({ type: "cancel" }); },
-  reopen(state, chars) { send({ type: "reopen", state, chars }); },
+  reopen(state, chars, index) { send({ type: "reopen", state, chars, index }); },
 };
 
 function start(init) {
@@ -52,7 +52,17 @@ window.addEventListener("message", (event) => {
   }
   if (!message || typeof message !== "object") return;
   if (message.type === "init") start(message.init);
-  else if (message.type === "reply") {
+  // Development builds: the live check drives the window (scripts/sfxLiveCheck.js)
+  else if (message.type === "dev" && process.env.TYPER_DEV === "1") {
+    let result = null;
+    try {
+      const dev = window.__sfxDev;
+      result = dev && dev[message.op] ? dev[message.op](...(message.args || [])) : { error: "no " + message.op };
+    } catch (error) {
+      result = { error: String((error && error.message) || error) };
+    }
+    send({ type: "devResult", op: message.op, result });
+  } else if (message.type === "reply") {
     const task = pending.get(message.id);
     if (!task) return;
     pending.delete(message.id);

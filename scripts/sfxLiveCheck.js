@@ -3,7 +3,8 @@
 // "LabelPlus-Nondum DEV" plugin loaded (npm run build:uxp:dev, then UXP
 // Developer Tools) and its panel open once. Not part of npm test.
 //
-//   node scripts/sfxLiveCheck.js
+//   node scripts/sfxLiveCheck.js            everything
+//   node scripts/sfxLiveCheck.js --multi    several layers at once only
 //
 // Works on documents it creates itself (closed at the end, without saving),
 // and on a PSD it saves in the channel folder.
@@ -56,14 +57,211 @@ const cjkFont = () => {
   const f = ps.app.fonts.find((x) => /Hei|Song|Kai|Han|YaHei|Noto Sans (SC|CJK)/i.test(x.name));
   return f ? f.postScriptName : null;
 };
+const selectIds = (ids) => modal(async () => {
+  play({ _obj: "select", _target: [{ _ref: "layer", _id: ids[0] }], makeVisible: false });
+  ids.slice(1).forEach((id) => play({ _obj: "select", _target: [{ _ref: "layer", _id: id }], selectionModifier: { _enum: "selectionModifierType", _value: "addToSelection" }, makeVisible: false }));
+});
+const selectedIds = () => (play({ _obj: "get", _target: [{ _property: "targetLayersIDs" }, { _ref: "document", _enum: "ordinal", _value: "targetEnum" }] }).targetLayersIDs || []).map((r) => r._id).sort((a, b) => a - b);
+const layerById = (id) => { let hit = null; const walk = (ls) => ls.forEach((l) => { if (l.id === id) hit = l; if (l.layers) walk(l.layers); }); walk(doc().layers); return hit; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const waitFor = async (cond, ms, what) => { const t = Date.now(); while (!cond()) { if (Date.now() - t > ms) throw new Error("timed out waiting for " + what); await sleep(100); } };
+// The real editor window (development builds answer "dev" messages, see uxp-src/sfx/entry.jsx)
+const openWindow = async () => {
+  globalThis.__sfxEditor = null;
+  globalThis.__sfxOpenRun = T.sfx.methods.sfxOpen().then((raw) => (typeof raw === "string" ? JSON.parse(raw) : raw));
+  await waitFor(() => globalThis.__sfxEditor && globalThis.__sfxEditor.log.indexOf("ready") >= 0, 120000, "the editor window");
+};
+const devCall = async (op, ...args) => {
+  const e = globalThis.__sfxEditor;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const n = e.log.length;
+    e.post({ type: "dev", op, args });
+    const t = Date.now();
+    let hit = null;
+    while (!hit && Date.now() - t < 5000) { hit = e.log.slice(n).find((x) => x && typeof x === "object" && x.op === op); if (!hit) await sleep(50); }
+    if (hit && !(hit.result && hit.result.error)) return hit.result;
+    await sleep(200);
+  }
+  throw new Error("the editor window did not answer " + op);
+};
 `;
 
 const near = (actual, expected, tolerance, label) => assert.ok(Math.abs(actual - expected) <= tolerance, label + ": expected " + expected + " ±" + tolerance + ", got " + actual);
 const log = (...args) => console.log("  ", ...args);
 const rounded = (c) => c && { r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b) };
 
+/* 11. Several layers at once: two text layers and a pixel layer selected */
+async function checkMulti() {
+  const ids = await run(`
+    const font = cjkFont();
+    if (!font) throw new Error("no Chinese font installed");
+    await modal(async () => {
+      await ps.app.createDocument({ width: 1600, height: 1200, resolution: 72, fill: "white", mode: "RGBColorMode", name: "SFX check multi" });
+      const color = (r, g, b) => { const c = new ps.app.SolidColor(); c.rgb.red = r; c.rgb.green = g; c.rgb.blue = b; return c; };
+      const a = await doc().createTextLayer({ contents: "砰砰", fontSize: 120, position: { x: 200, y: 300 }, fontName: font });
+      a.textItem.characterStyle.color = color(200, 20, 40);
+      a.name = "multi-a";
+      a.opacity = 70;
+      const b = await doc().createTextLayer({ contents: "咚", fontSize: 160, position: { x: 900, y: 800 }, fontName: font });
+      b.textItem.characterStyle.color = color(20, 60, 210);
+      b.name = "multi-b";
+      await (doc().createPixelLayer ? doc().createPixelLayer({ name: "multi-paper" }) : doc().createLayer({ name: "multi-paper" }));
+    });
+    const out = {};
+    layerList().forEach((l) => { out[l.name] = l.id; });
+    return out;
+  `);
+  const A = ids["multi-a"];
+  const B = ids["multi-b"];
+  const P = ids["multi-paper"];
+
+  // Reading: one session per text layer, top first; the pixel layer left out
+  const read = await run(`
+    await selectIds([${A}, ${B}, ${P}]);
+    const before = { history: historyCount(), layers: JSON.stringify(layerList()), work: !!sfx.readWorkPath(), selected: selectedIds() };
+    const g = await sfx.startGroup();
+    globalThis.__sfxMulti = g;
+    const init = sfx.editorInit(g, g.notices, null);
+    const after = { history: historyCount(), layers: JSON.stringify(layerList()), work: !!sfx.readWorkPath(), selected: selectedIds() };
+    return { before, after, sessions: g.sessions.map((s) => ({ mode: s.mode, name: s.layerName, id: s.layerId, text: s.model.text, color: s.model.color })),
+      skipped: g.skipped, notices: g.notices, preview: g.preview && { width: g.preview.width, height: g.preview.height }, items: init.items.map((i) => i.layerName), active: init.active };
+  `, 180000);
+  log("group", JSON.stringify({ sessions: read.sessions.map((s) => s.name + ":" + s.mode), skipped: read.skipped, notices: read.notices }));
+  assert.strictEqual(read.before.selected.length, 3, "three layers selected");
+  assert.deepStrictEqual(read.sessions.map((s) => s.name), ["multi-b", "multi-a"], "one session per text layer, top first");
+  assert.deepStrictEqual(read.sessions.map((s) => s.mode), ["new", "new"]);
+  assert.deepStrictEqual(read.skipped, [{ id: P, name: "multi-paper", code: "notText" }], "the pixel layer is left out");
+  assert.deepStrictEqual(read.notices[0], { key: "sfxLayerSkipped", layer: "multi-paper", reason: "notText" });
+  assert.deepStrictEqual(rounded(read.sessions[0].color), { r: 20, g: 60, b: 210 });
+  assert.deepStrictEqual(rounded(read.sessions[1].color), { r: 200, g: 20, b: 40 });
+  assert.strictEqual(read.after.layers, read.before.layers, "reading left the layers alone");
+  assert.strictEqual(read.after.history, read.before.history, "reading left no history state");
+  assert.strictEqual(read.after.work, read.before.work, "reading left the work path alone");
+  assert.deepStrictEqual(read.after.selected, read.before.selected, "the selection is kept");
+  assert.ok(read.preview && read.preview.width === 1600, "one preview for the group");
+  assert.deepStrictEqual(read.items, ["multi-b", "multi-a"], "the window gets both layers");
+
+  // A failure after the first layer: neither layer changes
+  const rolled = await run(`
+    const g = globalThis.__sfxMulti;
+    const before = { history: historyCount(), layers: JSON.stringify(layerList()), work: JSON.stringify(sfx.readWorkPath()) };
+    globalThis.__sfxFailAt = "betweenLayers";
+    let error = null;
+    try { await sfx.applyGroup(g, g.sessions.map((s) => s.model)); } catch (e) { error = String(e.message || e); }
+    globalThis.__sfxFailAt = null;
+    const after = { history: historyCount(), layers: JSON.stringify(layerList()), work: JSON.stringify(sfx.readWorkPath()) };
+    return { error, same: JSON.stringify(before) === JSON.stringify(after), modes: g.sessions.map((s) => s.mode) };
+  `, 120000);
+  assert.ok(rolled.error && /test failure/.test(rolled.error), "failed on purpose between the layers");
+  assert.ok(rolled.same, "rollback between layers: document unchanged");
+  assert.deepStrictEqual(rolled.modes, ["new", "new"]);
+  log("rollback ok: between layers");
+
+  // Apply: each layer its own model, one history state, both selected after
+  const applied = await run(`
+    const g = globalThis.__sfxMulti;
+    const models = g.sessions.map((s, i) => Object.assign({}, s.model, { rotation: i === 0 ? 15 : -10 }));
+    const before = historyCount();
+    const done = await sfx.applyGroup(g, models);
+    const ids = done.map((d) => d.layerId);
+    return { history: historyCount() - before, ids, layers: layerList(), selected: selectedIds(),
+      rotations: ids.map((id) => JSON.parse(sfx.readPayloadText(id).text).model.rotation),
+      colors: ids.map((id) => sfx.fillColor(id)), opacity: ids.map((id) => layerById(id).opacity), names: ids.map((id) => layerById(id).name) };
+  `, 180000);
+  log("applied", JSON.stringify({ history: applied.history, names: applied.names, rotations: applied.rotations }));
+  assert.strictEqual(applied.history, 1, "several layers: one history state");
+  assert.ok(!applied.layers.some((l) => l.name === "multi-a" || l.name === "multi-b"), "both text layers replaced");
+  assert.ok(applied.layers.some((l) => l.id === P), "the pixel layer is untouched");
+  assert.deepStrictEqual(applied.selected, applied.ids.slice().sort((a, b) => a - b), "both SFX layers selected");
+  assert.deepStrictEqual(applied.rotations, [15, -10], "each layer got its own model");
+  assert.deepStrictEqual(applied.names, ["咚", "砰砰"]);
+  assert.deepStrictEqual(rounded(applied.colors[0]), { r: 20, g: 60, b: 210 });
+  assert.deepStrictEqual(rounded(applied.colors[1]), { r: 200, g: 20, b: 40 });
+  near(applied.opacity[1], 70, 0.5, "multi-a's opacity is kept");
+
+  const undo = await run(`
+    await modal(async () => play({ _obj: "select", _target: [{ _ref: "historyState", _enum: "ordinal", _value: "previous" }] }));
+    const afterUndo = layerList();
+    await modal(async () => play({ _obj: "select", _target: [{ _ref: "historyState", _enum: "ordinal", _value: "next" }] }));
+    return { afterUndo, afterRedo: layerList() };
+  `);
+  assert.ok(["multi-a", "multi-b"].every((name) => undo.afterUndo.some((l) => l.name === name && l.kind === "text" && l.visible)), "one undo: both text layers back");
+  assert.ok(!undo.afterUndo.some((l) => applied.ids.indexOf(l.id) >= 0), "one undo: both SFX layers gone");
+  assert.ok(applied.ids.every((id) => undo.afterRedo.some((l) => l.id === id && l.visible)), "redo: both SFX layers back");
+  log("several layers: undo / redo ok");
+
+  // The real window, two SFX layers and a new text layer: switch to the
+  // second, rotate it, Apply
+  const windowApply = await run(`
+    await modal(async () => {
+      const c = await doc().createTextLayer({ contents: "嘭", fontSize: 100, position: { x: 300, y: 1000 }, fontName: cjkFont() });
+      c.name = "multi-c";
+    });
+    const C = layerList().find((l) => l.name === "multi-c").id;
+    await selectIds([${applied.ids[0]}, ${applied.ids[1]}, C]);
+    const before = historyCount();
+    await openWindow();
+    const state = await devCall("state");
+    await devCall("switchTo", 1);
+    await devCall("rotate", 33);
+    const edited = await devCall("state");
+    await devCall("apply");
+    const result = await globalThis.__sfxOpenRun;
+    const ids = result.layerIds || [];
+    return { state, edited, result, history: historyCount() - before, C, layers: layerList(),
+      rotations: ids.map((id) => JSON.parse(sfx.readPayloadText(id).text).model.rotation), texts: ids.map((id) => JSON.parse(sfx.readPayloadText(id).text).model.text) };
+  `, 240000);
+  log("window", JSON.stringify({ state: windowApply.state, result: windowApply.result, rotations: windowApply.rotations }));
+  assert.strictEqual(windowApply.state.count, 3, "the window opened all three layers");
+  assert.deepStrictEqual(windowApply.state.modes.slice().sort(), ["new", "update", "update"], "a text layer and two SFX layers");
+  assert.strictEqual(windowApply.edited.active, 1, "switched to the second layer");
+  assert.strictEqual(windowApply.result.code, "applied");
+  assert.strictEqual(windowApply.history, 1, "window Apply: one history state");
+  // Only the layer that was second in the window turned; the others kept theirs
+  const expected = { "嘭": 0, "咚": 15, "砰砰": -10 };
+  expected[windowApply.edited.texts[1]] = 33;
+  const got = {};
+  windowApply.texts.forEach((text, i) => { got[text] = windowApply.rotations[i]; });
+  assert.deepStrictEqual(got, expected, "each layer written with its own model");
+  assert.ok(applied.ids.every((id) => windowApply.result.layerIds.indexOf(id) >= 0), "the SFX layers are updated in place");
+  assert.ok(!windowApply.layers.some((l) => l.id === windowApply.C), "the text layer was replaced");
+  log("window apply ok");
+
+  // Cancel: every layer as it was
+  const windowCancel = await run(`
+    await modal(async () => {
+      for (const [text, y] of [["哗", 200], ["啦", 500]]) {
+        const l = await doc().createTextLayer({ contents: text, fontSize: 90, position: { x: 1200, y }, fontName: cjkFont() });
+        l.name = "cancel-" + text;
+      }
+    });
+    const ids = layerList().filter((l) => /^cancel-/.test(l.name)).map((l) => l.id);
+    await selectIds(ids.concat([${applied.ids[1]}]));
+    const before = { history: historyCount(), layers: JSON.stringify(layerList()), selected: selectedIds() };
+    await openWindow();
+    const state = await devCall("state");
+    await devCall("rotate", 45);
+    await devCall("switchTo", 2);
+    await devCall("rotate", -45);
+    await devCall("cancel");
+    const result = await globalThis.__sfxOpenRun;
+    const after = { history: historyCount(), layers: JSON.stringify(layerList()), selected: selectedIds() };
+    return { state, result, same: JSON.stringify(before) === JSON.stringify(after), before, after };
+  `, 240000);
+  assert.strictEqual(windowCancel.state.count, 3);
+  assert.strictEqual(windowCancel.result.code, "cancel");
+  assert.ok(windowCancel.same, "Cancel: document unchanged " + JSON.stringify({ before: windowCancel.before.history, after: windowCancel.after.history }));
+  log("window cancel ok");
+}
+
 async function main() {
   console.log("Photoshop:", await run(`return { ps: require("uxp").host.version, docs: ps.app.documents.length };`, 8000));
+  if (process.argv.includes("--multi")) {
+    await checkMulti();
+    await run(`await modal(async () => { while (ps.app.documents.length && /SFX check multi/.test(doc().name)) await doc().closeWithoutSaving(); }); return true;`);
+    console.log("SFX live check (several layers) passed");
+    return;
+  }
 
   /* 1. A 300 dpi manga page, larger than the editor's preview */
   const setup = await run(`
@@ -330,6 +528,8 @@ async function main() {
     near(n[key][0], was[0] + 80, 1, "Bézier moved x"); near(n[key][1], was[1] + 40, 1, "Bézier moved y");
   }));
   log("Bézier ok:", curved.path.nodes.length, "anchors, S curve and bend stored, re-read, undone, moved, saved");
+
+  await checkMulti();
 
   await run(`await modal(async () => { while (ps.app.documents.length && /SFX check|sfx-check|sfx-bezier/.test(doc().name)) await doc().closeWithoutSaving(); }); return true;`);
   console.log("SFX live check passed");
