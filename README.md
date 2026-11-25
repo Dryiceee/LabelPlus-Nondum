@@ -108,7 +108,7 @@ irm https://raw.githubusercontent.com/Dryiceee/LabelPlus-Nondum/main/get.ps1 | i
 
 如果导入要覆盖的 PSD 正在 Photoshop 里打开，会先询问，再不保存地关闭它们。
 
-### SFX 拟声字
+### SFX 编辑器
 
 演示依次是：拖端点旋转拉伸，拖 ● 弯曲，Shift+拖端点放大尾字，Alt+拖端点让每个字原地旋转，单独旋转、移动一个字，框选两个字后拖 ◆ 只弯这一段，拖控制柄调成 S 形，最后点「应用」。
 
