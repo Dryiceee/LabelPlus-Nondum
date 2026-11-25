@@ -153,19 +153,6 @@ npm run package:release
 
 安装包会生成在 `Releases/` 文件夹里。
 
-### 开发版
-
-开发时用 `npm run build:uxp:dev` 生成 `uxp-dev/` 文件夹，再用 UXP Developer Tools 加载其中的 `manifest.json`。之后每次改完代码，重新运行这条命令，再在 UXP Developer Tools 里点 Reload。
-
-开发版的 SFX 编辑器可以用 `node scripts/sfxLiveCheck.js` 在 Photoshop 里自动检查一遍（需要先打开开发版面板）：定位、内孔、一次撤销、再次编辑、保存后重新打开、失败回滚。它只在自己新建的文档里操作，结束时不保存关闭。
-
-开发版是一个单独的插件，可以和已安装的正式版同时使用：
-
-- 插件 ID 是 `com.dryiceee.labelplus-nondum.dev`，面板菜单里叫 LabelPlus-Nondum DEV。
-- 数据放在 `%APPDATA%\LabelPlus-Nondum-Dev\UXP`。第一次打开时会复制一份正式版的样式和设置，之后两边各存各的。
-- 不检查更新，也不会动正式版的插件文件夹。
-- `npm run package:release` 只接受正式版的 ID，开发版的文件不会混进发布包。
-
 ## 许可证与致谢
 
 本项目以 GNU GPL 第 2 版发布，详见 [LICENSE.md](LICENSE.md)。
