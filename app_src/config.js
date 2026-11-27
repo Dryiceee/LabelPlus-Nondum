@@ -1,6 +1,6 @@
 const config = {
   appTitle: "LabelPlus-Nondum",
-  appVersion: "1.2.3",
+  appVersion: "1.2.4",
   appUrl: "https://github.com/Dryiceee/LabelPlus-Nondum",
   typerToolsUrl: "https://swirt.github.io/typertools/",
   authorName: "dryice",

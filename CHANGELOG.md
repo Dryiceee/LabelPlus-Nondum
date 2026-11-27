@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.4
+
+- Ruby notes on a text layer scaled with free transform: Apply no longer shrinks the base by the layer's scale (17.6 pt became 4 pt at 436 %), and the notes get the size the editor showed instead of a fraction of it, so the result matches the preview. A base already shrunk by 1.2.3 comes back with History (undo the 行间注 step).
+
 ## 1.2.3
 
 - Ruby notes (行间注), from the new button next to SFX: select a point text layer, drag over characters in the window and type a note for them. Vertical text gets its notes on the right, horizontal text above. Notes take the base's font, colour and layer style. Each note has an alignment (spread by default, centre, start; spread shares the room out 1-2-1, half a gap at each end, or 0-1-0, flush with both ends), an overflow mode for notes longer than their characters (shrink by default, squeeze, overhang, or spread the base), a size, a ratio and a gap. Where a note needs room, the base's line spacing grows so it does not run into the next column. The preview shows the base moved where Apply will put it, with its colour and stroke, and undoes with Ctrl+Z (redo: Ctrl+Shift+Z or Ctrl+Y). Apply puts the base and the notes in a group, in one history step. The notes are saved with the PSD: open the group again after editing or moving the base, and the notes re-align to it. Paragraph, warped and rotated text are not supported.
