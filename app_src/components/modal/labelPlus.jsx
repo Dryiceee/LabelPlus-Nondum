@@ -7,7 +7,7 @@ import { FiX } from "react-icons/fi";
 import { csInterface, locale, nativeConfirm, getUserFonts, readStorage, writeToStorage } from "../../utils";
 import { useContext } from "../../context";
 import StylesBlock from "../stylesBlock/stylesBlock";
-import { DEFAULT_REPLACEMENTS, activeReplacements, addReplacements, clickRow, restoreDefaultReplacements } from "../../labelplus/importOptions";
+import { DEFAULT_REPLACEMENTS, activeReplacements, addReplacements, clickRow, clickedGroupStyle, followedGroupStyle, foldersToOpen, restoreDefaultReplacements } from "../../labelplus/importOptions";
 import { parseLpText } from "../../labelplus/lpParser";
 import { buildImportPlan, compareNames, detectImageFolder, isImageFile, matchImages, mergeGroupRules, OUTPUT_FOLDER_NAME } from "../../labelplus/importPlan";
 import { dirnameOf, groupIssues, joinPath, readSidecar, runImport } from "../../labelplus/chapterRun";
@@ -99,7 +99,7 @@ const Check = ({ checked, onChange, children }) => (
 );
 
 const LabelPlusModal = React.memo(function LabelPlusModal({ front = true }) {
-  const context = useContext((state) => ({ styles: state.styles, currentStyleId: state.currentStyleId }));
+  const context = useContext((state) => ({ styles: state.styles, folders: state.folders, openFolders: state.openFolders, currentStyleId: state.currentStyleId }));
   const saved = React.useMemo(() => readStorage(SETTINGS_KEY) || {}, []);
   const [textFile, setTextFile] = React.useState("");
   const [lp, setLp] = React.useState(null);
@@ -143,24 +143,34 @@ const LabelPlusModal = React.memo(function LabelPlusModal({ front = true }) {
   const usedRules = React.useMemo(() => mergeGroupRules(groups, rules), [groups, rules]);
 
   const setRule = (group, change) => setRules(Object.assign({}, usedRules, { [group]: Object.assign({}, usedRules[group], change) }));
-  // The style list below the group tabs selects the style of the open tab
+  // The style list below the group tabs shows and picks the style of the open
+  // tab. It highlights the group's own style, not the panel's current one: the
+  // panel always has a current style (the first one when none is set), so it
+  // cannot show a group that has none, and a click on the panel's current style
+  // would change nothing. The window reads the clicks instead.
   const currentGroup = groups.indexOf(activeGroup) >= 0 ? activeGroup : groups[0];
-  const expectedStyle = React.useRef(undefined);
-  React.useEffect(() => {
+  const groupStyleId = (usedRules[currentGroup] && usedRules[currentGroup].styleId) || null;
+  const pickStyle = (event) => {
     if (!currentGroup) return;
-    const id = (usedRules[currentGroup] && usedRules[currentGroup].styleId) || null;
-    if ((context.state.currentStyleId || null) === id) return;
-    expectedStyle.current = id;
-    context.dispatch({ type: "setCurrentStyleId", id });
-  }, [currentGroup]);
+    const item = event.target && event.target.closest ? event.target.closest(".style-item") : null;
+    const keys = { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey };
+    const id = clickedGroupStyle(groupStyleId, item && item.id, context.state.styles.map((style) => style.id), keys);
+    if (id) setRule(currentGroup, { styleId: id });
+  };
+  // The group's style is in view when its tab opens, in a folder that may be closed
   React.useEffect(() => {
+    if (!currentGroup || !groupStyleId) return;
+    const style = context.state.styles.find((item) => item.id === groupStyleId);
+    foldersToOpen(style, context.state.folders, context.state.openFolders).forEach((id) => context.dispatch({ type: "toggleFolder", id }));
+  }, [currentGroup, groupStyleId]);
+  // The previous/next style shortcuts change the panel's current style
+  const lastPanelStyle = React.useRef(context.state.currentStyleId || null);
+  React.useEffect(() => {
+    const previous = lastPanelStyle.current;
+    lastPanelStyle.current = context.state.currentStyleId || null;
     if (!currentGroup) return;
-    const id = context.state.currentStyleId || null;
-    if (expectedStyle.current === id) {
-      expectedStyle.current = undefined;
-      return;
-    }
-    if (((usedRules[currentGroup] && usedRules[currentGroup].styleId) || null) !== id) setRule(currentGroup, { styleId: id });
+    const id = followedGroupStyle(groupStyleId, previous, lastPanelStyle.current);
+    if (id) setRule(currentGroup, { styleId: id });
   }, [context.state.currentStyleId]);
 
   // A scroll of anything around the window would leave the panel displaced
@@ -357,11 +367,11 @@ const LabelPlusModal = React.memo(function LabelPlusModal({ front = true }) {
                   <Check checked={excludedGroups.indexOf(currentGroup) < 0} onChange={() => toggleIn(excludedGroups, setExcludedGroups, currentGroup)}>{locale.lpGroupImport}</Check>
                   <Check checked={!!(usedRules[currentGroup] && usedRules[currentGroup].center)} onChange={(value) => setRule(currentGroup, { center: value })}>{locale.lpGroupCenter}</Check>
                   <Check checked={!!(usedRules[currentGroup] && usedRules[currentGroup].clean)} onChange={(value) => setRule(currentGroup, { clean: value })}>{locale.lpGroupClean}</Check>
-                  <button type="button" className="topcoat-button" onClick={() => context.dispatch({ type: "setCurrentStyleId", id: null })}>{locale.lpNoStyle}</button>
+                  <button type="button" className="topcoat-button" onClick={() => setRule(currentGroup, { styleId: null })}>{locale.lpNoStyle}</button>
                 </div>
               </React.Fragment>
             ) : null}
-            <div className="lp-styles styles-block"><StylesBlock /></div>
+            <div className="lp-styles styles-block" onClick={pickStyle}><StylesBlock activeStyleId={lp ? groupStyleId : undefined} /></div>
           </section>
 
           {lp ? (

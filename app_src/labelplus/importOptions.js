@@ -60,4 +60,34 @@ function clickRow(names, selected, anchor, name, keys = {}) {
   return { selected: names.filter((item) => chosen.has(item)), anchor: nextAnchor };
 }
 
-export { DEFAULT_REPLACEMENTS, addReplacements, restoreDefaultReplacements, activeReplacements, clickRow };
+// The style list under the group tabs picks the open group's style. A plain
+// click on a style picks it, the panel's current style too: that click leaves
+// the panel's current style unchanged, so only the click itself tells. Ctrl and
+// Shift build a multi-selection in the list and pick nothing. Returns the
+// group's style id, or null when it stays as it was.
+function clickedGroupStyle(groupStyleId, clickedId, styleIds, keys = {}) {
+  if (keys.ctrl || keys.shift || !clickedId || (styleIds || []).indexOf(clickedId) < 0) return null;
+  return clickedId === groupStyleId ? null : clickedId;
+}
+
+// The panel's current style changed while the window is open (a click on
+// another style, or the previous/next style shortcut): the open group follows.
+// Returns the group's new style id, or null when it stays as it was.
+function followedGroupStyle(groupStyleId, previousId, currentId) {
+  if (!currentId || currentId === previousId) return null;
+  return currentId === groupStyleId ? null : currentId;
+}
+
+// The closed folders between the root and a style, outermost first, so that
+// the group's style can be shown. "unsorted" stands for the styles without one.
+function foldersToOpen(style, folders, openFolders) {
+  if (!style) return [];
+  const open = openFolders || [];
+  if (!style.folder) return open.indexOf("unsorted") < 0 ? ["unsorted"] : [];
+  const parents = new Map((folders || []).map((folder) => [folder.id, folder.parentId || null]));
+  const path = [];
+  for (let id = style.folder; id && parents.has(id) && path.indexOf(id) < 0; id = parents.get(id)) path.unshift(id);
+  return path.filter((id) => open.indexOf(id) < 0);
+}
+
+export { DEFAULT_REPLACEMENTS, addReplacements, restoreDefaultReplacements, activeReplacements, clickRow, clickedGroupStyle, followedGroupStyle, foldersToOpen };

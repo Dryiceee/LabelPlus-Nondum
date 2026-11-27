@@ -1,7 +1,7 @@
 // Page list clicks and replacement options (app_src/labelplus/importOptions.js)
 const assert = require("assert");
 const load = require("./helpers/loadAppModule")();
-const { DEFAULT_REPLACEMENTS, addReplacements, restoreDefaultReplacements, activeReplacements, clickRow } = load("app_src/labelplus/importOptions.js");
+const { DEFAULT_REPLACEMENTS, addReplacements, restoreDefaultReplacements, activeReplacements, clickRow, clickedGroupStyle, followedGroupStyle, foldersToOpen } = load("app_src/labelplus/importOptions.js");
 const { applyTextReplace } = load("app_src/labelplus/lpParser.js");
 
 // The defaults, in an order that keeps "！？" whole
@@ -37,5 +37,32 @@ assert.deepStrictEqual(clickRow(NAMES, ["5"], "2", "4", { shift: true }), { sele
 assert.deepStrictEqual(clickRow(NAMES, ["2", "3", "4"], "2", "1", { shift: true }).selected, ["1", "2"]);
 assert.deepStrictEqual(clickRow(NAMES, ["5"], "1", "2", { shift: true, ctrl: true }).selected, ["1", "2", "5"]);
 assert.deepStrictEqual(clickRow(NAMES, [], null, "4", { shift: true }), { selected: ["4"], anchor: "4" });
+
+// The group style list: a plain click picks the style, even the one that is
+// already the panel's current style (the store does not change then)
+const STYLES = ["a", "b", "c"];
+assert.strictEqual(clickedGroupStyle(null, "a", STYLES), "a");
+assert.strictEqual(clickedGroupStyle("b", "a", STYLES), "a");
+assert.strictEqual(clickedGroupStyle("a", "a", STYLES), null);
+assert.strictEqual(clickedGroupStyle(null, "a", STYLES, { ctrl: true }), null);
+assert.strictEqual(clickedGroupStyle(null, "a", STYLES, { shift: true }), null);
+assert.strictEqual(clickedGroupStyle(null, "gone", STYLES), null);
+assert.strictEqual(clickedGroupStyle(null, "", STYLES), null);
+assert.strictEqual(clickedGroupStyle(null, null, STYLES), null);
+
+// The previous/next style shortcuts: the group follows a real change only
+assert.strictEqual(followedGroupStyle(null, "a", "b"), "b");
+assert.strictEqual(followedGroupStyle("b", "a", "b"), null);
+assert.strictEqual(followedGroupStyle(null, "a", "a"), null);
+assert.strictEqual(followedGroupStyle("a", "a", null), null);
+
+// The group's style comes into view: closed folders on its path open, outermost first
+const FOLDERS = [{ id: "top" }, { id: "mid", parentId: "top" }, { id: "leaf", parentId: "mid" }];
+assert.deepStrictEqual(foldersToOpen({ folder: "leaf" }, FOLDERS, ["mid"]), ["top", "leaf"]);
+assert.deepStrictEqual(foldersToOpen({ folder: "leaf" }, FOLDERS, ["top", "mid", "leaf"]), []);
+assert.deepStrictEqual(foldersToOpen({ folder: "" }, FOLDERS, []), ["unsorted"]);
+assert.deepStrictEqual(foldersToOpen({}, FOLDERS, ["unsorted"]), []);
+assert.deepStrictEqual(foldersToOpen(null, FOLDERS, []), []);
+assert.deepStrictEqual(foldersToOpen({ folder: "a" }, [{ id: "a", parentId: "b" }, { id: "b", parentId: "a" }], []), ["b", "a"]);
 
 console.log("LabelPlus import option tests passed");

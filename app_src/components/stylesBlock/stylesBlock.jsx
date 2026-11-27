@@ -23,7 +23,9 @@ import { mixedLooks, styleFromLayer } from "../../labelplus/layerStyle";
 const FontPreviewContext = React.createContext({ aliases: {}, css: "", revision: 0 });
 const emptyIdSet = new Set();
 
-const StylesBlock = React.memo(function StylesBlock() {
+// `activeStyleId` overrides the highlighted style (the LabelPlus window shows a
+// group's style, null for none); without it the panel's current style is
+const StylesBlock = React.memo(function StylesBlock({ activeStyleId }) {
   notePerfRender("StylesBlock");
   const context = useContext((state) => ({
     styles: state.styles,
@@ -292,7 +294,11 @@ const StylesBlock = React.memo(function StylesBlock() {
     () => new Map((context.state.folders || []).map((folder) => [folder.id, folder])),
     [context.state.folders]
   );
-  const currentStyleFolderId = context.state.currentStyle?.folder || null;
+  const activeId = activeStyleId !== undefined ? activeStyleId : context.state.currentStyleId;
+  const activeStyle = activeStyleId !== undefined
+    ? (activeId && context.state.styles.find((style) => style.id === activeId)) || null
+    : context.state.currentStyle;
+  const currentStyleFolderId = activeStyle?.folder || null;
   const currentStylePath = React.useMemo(
     () => {
       const ids = new Set();
@@ -339,7 +345,7 @@ const StylesBlock = React.memo(function StylesBlock() {
                 lockedFolders={lockedFolders}
                 selection={styleSelection}
                 branchActiveStyleId={
-                  currentStyleFolderId === null ? context.state.currentStyleId : null
+                  currentStyleFolderId === null ? activeId : null
                 }
                 currentStylePath={emptyIdSet}
                 direction={context.state.direction}
@@ -358,7 +364,7 @@ const StylesBlock = React.memo(function StylesBlock() {
               openFolders={context.state.openFolders}
               lockedFolders={lockedFolders}
               selection={styleSelection}
-              currentStyleId={context.state.currentStyleId}
+              currentStyleId={activeId}
               currentStylePath={currentStylePath}
               direction={context.state.direction}
               showQuickStyleSize={context.state.showQuickStyleSize}
@@ -1169,6 +1175,10 @@ StyleItem.propTypes = {
   showQuickStyleSize: PropTypes.bool,
   styleSizeStep: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   onOpenContextMenu: PropTypes.func.isRequired,
+};
+
+StylesBlock.propTypes = {
+  activeStyleId: PropTypes.string,
 };
 
 export default StylesBlock;
