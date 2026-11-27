@@ -167,6 +167,45 @@ export function takeBackStyles(layerText, takeBack) {
 
 export const hasTakeBack = (takeBack) => !!takeBack && ((takeBack.tracking && takeBack.tracking.length > 0) || (takeBack.leading && takeBack.leading.length > 0));
 
+// What a layerText must say to be written back. Photoshop reads `size`,
+// `leading` and `baselineShift` before the layer transform, but takes a
+// written value as the displayed one (uxp-src/host/photoshop.js,
+// _displayedStyleValue): a free-transformed layer written back as read
+// would shrink or grow by its scale. Every value here is as read (before the
+// transform); the implied value is the displayed one where Photoshop gave
+// it and nothing changed it since (the edits above drop it when they change
+// a value), else the value times the scale.
+export function displayedLayerText(layerText) {
+  const result = clone(layerText);
+  const scale = transformScale(result && result.transform);
+  const shown = (style, key, impliedKey) => {
+    const implied = Number(style[impliedKey]);
+    if (style[impliedKey] !== undefined && style[impliedKey] !== null && isFinite(implied)) return implied;
+    const value = Number(style[key]);
+    return isFinite(value) ? value * scale : undefined;
+  };
+  ((result && result.textStyleRange) || []).forEach((range) => {
+    const style = range.textStyle || {};
+    if (style.size !== undefined) {
+      const size = shown(style, "size", "impliedFontSize");
+      if (size !== undefined) style.size = size;
+    }
+    if (typeof style.leading === "number") {
+      const leading = shown(style, "leading", "impliedLeading");
+      if (leading !== undefined) style.leading = leading;
+    }
+    if (typeof style.baselineShift === "number") {
+      const shift = shown(style, "baselineShift", "impliedBaselineShift");
+      if (shift !== undefined) style.baselineShift = shift;
+    }
+    delete style.impliedFontSize;
+    delete style.impliedLeading;
+    delete style.impliedBaselineShift;
+    range.textStyle = style;
+  });
+  return result;
+}
+
 // Sets keys on every range's style (e.g. faux bold off for measuring)
 export function overrideStyles(layerText, override) {
   const result = clone(layerText);

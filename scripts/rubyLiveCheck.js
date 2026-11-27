@@ -5,7 +5,7 @@
 //
 //   node scripts/rubyLiveCheck.js            everything
 //   node scripts/rubyLiveCheck.js --window   the real editor window only
-//   node scripts/rubyLiveCheck.js --distribute | --second   one part only
+//   node scripts/rubyLiveCheck.js --distribute | --second | --scaled   one part only
 //
 // Works on documents it creates itself (closed at the end, without saving),
 // and on a PSD it saves in the channel folder.
@@ -432,6 +432,69 @@ async function checkSecondSession(autoLeading, below) {
   soft("second note room", () => assert.ok(t[1] - t[2] > b[1] - b[2] + 10, "column 3 moved away for its note: " + (t[1] - t[2]) + " vs " + (b[1] - b[2])));
 }
 
+// A free-transformed base at 300 ppi (reported 2026-11-28): stored 4.029 pt,
+// scaled 436.42 %, shown 17.58 pt. Apply must keep the base's size and give
+// the note the size it planned.
+async function checkScaled() {
+  const out = await run(`
+    let id = 0;
+    const shownPt = (layerId) => play({ _obj: "get", _target: [{ _property: "textKey" }, { _ref: "layer", _id: layerId }] }).textKey.textStyleRange.map((r) => {
+      const s = r.textStyle; const v = s.impliedFontSize || s.size; return Math.round((typeof v === "object" ? v._value : v) * 1000) / 1000; });
+    await modal(async () => {
+      await ps.app.createDocument({ width: 2400, height: 2400, resolution: 300, fill: "white", mode: "RGBColorMode", name: "Ruby scaled" });
+      // createTextLayer takes fontSize in px: 4.029 pt at 300 ppi
+      const v = await doc().createTextLayer({ contents: "区和符号肥沃的\\r的额全微分去哦我\\r诉求我去过而王鹏", fontSize: 4.029 * 300 / 72, position: { x: 400, y: 300 }, fontName: cjkFont() });
+      v.textItem.orientation = "vertical";
+      id = v.id;
+      // Tight columns (fixed leading 1.1 em), set before the scaling
+      await select(id);
+      const t = host._getLayerText();
+      t.layerText.textStyleRange = t.layerText.textStyleRange.map((r) => Object.assign({}, r, { textStyle: Object.assign({}, r.textStyle, { autoLeading: false, leading: 4.029 * 1.1 }) }));
+      play({ _obj: "set", _target: [{ _ref: "layer", _id: id }], to: host.jamText.toLayerTextObject(t) });
+      await v.scale(436.4203, 436.4203);
+    });
+    await select(id);
+    const transform = play({ _obj: "get", _target: [{ _property: "textKey" }, { _ref: "layer", _id: id }] }).textKey.transform;
+    const baseBefore = shownPt(id);
+    const before = await measureNow(id);
+    await select(id);
+    const s = await R.startSession();
+    const ems = s.measured.ems.slice(8, 13);
+    const done = await R.applyNotes(s, [{ id: "a", start: 8, end: 13, text: "测试测试测试", align: "spread", distribute: "121", ratio: 0.5, gap: 0 }]);
+    const after = await measureNow(id);
+    const note = notesOf(done.groupId)[0];
+    const baseAfter = shownPt(id);
+    const noteShown = shownPt(note.id);
+    // Opened again from the group and applied as it is: nothing moves
+    await select(done.groupId);
+    const s2 = await R.startSession();
+    await R.applyNotes(s2, s2.notes);
+    const again = await measureNow(id);
+    const note2 = notesOf(done.groupId)[0];
+    const result = { transform, baseBefore, baseAfter, noteShown, ems, before, after, note: note.bounds, room: done.room,
+      again, baseAgain: shownPt(id), noteAgain: shownPt(note2.id), note2: note2.bounds };
+    await modal(async () => { await doc().closeWithoutSaving(); });
+    return result;
+  `, 300000);
+  const centres = (glyphs) => [0, 1, 2].map((l) => { const bs = glyphs.filter((g) => g.line === l && g.box).map((g) => g.box); return bs.reduce((a, b) => a + (b.left + b.right) / 2, 0) / bs.length; });
+  const b = centres(out.before);
+  const a = centres(out.after);
+  const span = spanOf(out.after, 8, 13, true);
+  log("scaled", JSON.stringify({ scale: out.transform && out.transform.xx, baseBefore: out.baseBefore, baseAfter: out.baseAfter, noteShown: out.noteShown, em: out.ems[0], cols: { before: b.map(Math.round), after: a.map(Math.round) }, note: out.note, span: { lo: Math.round(span.lo), hi: Math.round(span.hi) } }));
+  const plannedPt = (out.ems[0] * 0.5 * 72) / 300;
+  soft("base size kept", () => out.baseAfter.forEach((pt) => near(pt, out.baseBefore[0], 0.05, "the base still shows " + out.baseBefore[0] + " pt, got " + pt)));
+  soft("note size", () => near(out.noteShown[0], plannedPt, 0.1, "the note shows the planned " + plannedPt.toFixed(3) + " pt"));
+  soft("room made", () => assert.ok(a[0] - a[1] > b[0] - b[1] + 5, "column 2 moved away for its note: " + (a[0] - a[1]) + " vs " + (b[0] - b[1])));
+  soft("note centred", () => near((out.note.top + out.note.bottom) / 2, span.center, 4, "the note centres on its characters"));
+  soft("note beside", () => assert.ok(out.note.left >= span.cross && out.note.right <= a[0], "the note sits between the two columns"));
+  const g = centres(out.again);
+  log("scaled again", JSON.stringify({ baseAgain: out.baseAgain, noteAgain: out.noteAgain, cols: g.map(Math.round), note2: out.note2 }));
+  soft("re-align size", () => out.baseAgain.forEach((pt) => near(pt, out.baseBefore[0], 0.05, "the base keeps its size on re-align")));
+  soft("re-align note", () => near(out.noteAgain[0], out.noteShown[0], 0.02, "the note keeps its size on re-align"));
+  soft("re-align columns", () => [0, 1, 2].forEach((i) => near(g[i], a[i], 1, "column " + (i + 1) + " stays put on re-align")));
+  soft("re-align note place", () => near(out.note2.left, out.note.left, 1, "the note stays put on re-align"));
+}
+
 async function checkWindow() {
   // The real window, driven through the page's dev hook
   const opened = await run(`
@@ -523,7 +586,7 @@ async function checkDistribute() {
 
 (async () => {
   const windowOnly = process.argv.includes("--window");
-  const only = process.argv.includes("--distribute") ? [checkDistribute] : process.argv.includes("--second") ? [() => checkSecondSession(false), () => checkSecondSession(true), () => checkSecondSession(true, true), () => checkSecondSession(false, true)] : null;
+  const only = process.argv.includes("--scaled") ? [checkScaled] : process.argv.includes("--distribute") ? [checkDistribute] : process.argv.includes("--second") ? [() => checkSecondSession(false), () => checkSecondSession(true), () => checkSecondSession(true, true), () => checkSecondSession(false, true)] : null;
   if (only) {
     try {
       for (const check of only) await check();
@@ -550,6 +613,7 @@ async function checkDistribute() {
       await checkSecondSession(false);
       await checkSecondSession(true, true);
       await checkSecondSession(false, true);
+      await checkScaled();
     }
     await checkWindow();
     if (failures.length) throw new Error(failures.length + " check(s) failed:\n" + failures.join("\n"));

@@ -265,6 +265,32 @@ const exact = (str, size, tracking = 0, scale = 1) => {
   assert.strictEqual(noteText.textKey, "注释");
   assert.deepStrictEqual(noteText.textStyleRange, [{ from: 0, to: 2, textStyle: { size: 7, tracking: 13, baselineShift: 0, horizontalScale: 100, verticalScale: 80, autoLeading: true } }]);
   assert.ok(noteText.transform && noteText.transform.xx === 2, "the layer keeps the base's transform");
+
+  // Written back: the displayed values (Photoshop reads before the transform,
+  // writes as shown). The case reported on 2026-11-28: 4.029 pt stored on a
+  // layer scaled 4.364203, shown at 17.584 pt.
+  const k = 4.364203;
+  const scaled = {
+    textKey: "的额全微分\r注", transform: { xx: k, xy: 0, yx: 0, yy: k, tx: 0, ty: 0 },
+    textStyleRange: [
+      { from: 0, to: 3, textStyle: { size: 4.029, impliedFontSize: 17.584, autoLeading: false, leading: 6.5, impliedLeading: 28.367, baselineShift: 1, impliedBaselineShift: 4.364, tracking: 0 } },
+      { from: 3, to: 7, textStyle: { size: 4.029, impliedFontSize: 17.584, autoLeading: true, tracking: 0 } },
+    ],
+  };
+  const shown = ranges.displayedLayerText(scaled);
+  assert.deepStrictEqual(shown.textStyleRange[0].textStyle, { size: 17.584, autoLeading: false, leading: 28.367, baselineShift: 4.364, tracking: 0 }, "the implied values, as Photoshop shows them");
+  assert.strictEqual(shown.textStyleRange[1].textStyle.size, 17.584);
+  assert.ok(!("leading" in shown.textStyleRange[1].textStyle), "auto leading stays auto");
+  assert.strictEqual(scaled.textStyleRange[0].textStyle.size, 4.029, "the input is left alone");
+  // A value ruby changed has no implied value left: the stored value times the scale
+  const widened = ranges.displayedLayerText(ranges.setLeading(scaled, [0, 1, 2], 10));
+  near(widened.textStyleRange[0].textStyle.leading, 10 * k, 1e-9, "new leading, as shown");
+  near(widened.textStyleRange[0].textStyle.size, 17.584, 1e-9, "the size untouched");
+  const noteShown = ranges.displayedLayerText(ranges.noteLayerText(scaled, 0, { text: "测试", size: 8.792 / k }));
+  near(noteShown.textStyleRange[0].textStyle.size, 8.792, 1e-9, "a note planned at 8.792 pt shows at 8.792 pt");
+  const tracked = ranges.displayedLayerText(ranges.addTracking(scaled, [{ index: 1, delta: 100 }]));
+  assert.ok(tracked.textStyleRange.every((r) => r.textStyle.size === 17.584), "tracking edits keep every run's size");
+  assert.deepStrictEqual(ranges.displayedLayerText({ textKey: "a", textStyleRange: [{ from: 0, to: 1, textStyle: { size: 12, leading: 14 } }] }).textStyleRange[0].textStyle, { size: 12, leading: 14 }, "an unscaled layer keeps its values");
   // Leading: read, set on a line, put back
   const lt = { textKey: "今天\r第二", textStyleRange: [{ from: 0, to: 5, textStyle: { size: 20, autoLeading: true } }] };
   const saved = ranges.leadingOf(lt, [3, 4]);

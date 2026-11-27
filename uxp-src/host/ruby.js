@@ -22,7 +22,7 @@ const { componentBoxes, componentPaths, pickFactor, mapGlyphs } = require("../..
 const { detectUnit } = require("../../app_src/sfx/outline");
 const { normalizeNote, spanGeometry, planNote, placeNote, spreadDeltas, spreadRoom, widenSpan, mergeDeltas, overlaps, lineRoom, leadingTarget, noteLength } = require("../../app_src/ruby/layout");
 const { lineGeometry } = require("../../app_src/ruby/measure");
-const { emsOf, addTracking, overrideStyles, noteLayerText, isPlainScale, pixelsToTypeUnit, transformScale, leadingOf, setLeading, leadingTypeAt, takeBackStyles, hasTakeBack, styleAt } = require("../../app_src/ruby/textRanges");
+const { emsOf, addTracking, overrideStyles, noteLayerText, isPlainScale, pixelsToTypeUnit, transformScale, leadingOf, setLeading, leadingTypeAt, takeBackStyles, hasTakeBack, styleAt, displayedLayerText } = require("../../app_src/ruby/textRanges");
 const { buildPayload, parsePayload, readXmpData, writeXmpData, relocate, relocatedDeltas, relocatedLeading } = require("../../app_src/ruby/payload");
 const { chars, utf16Offsets } = require("../../app_src/ruby/text");
 
@@ -155,8 +155,10 @@ function jamTextOf(id) {
   return text;
 }
 
+// layerText holds values as read (before the layer transform): written as
+// the displayed ones, so a free-transformed layer keeps its size
 function setJamText(id, layerText, typeUnit) {
-  play({ _obj: "set", _target: [layerRef(id)], to: host.jamText.toLayerTextObject({ layerText, typeUnit }) });
+  play({ _obj: "set", _target: [layerRef(id)], to: host.jamText.toLayerTextObject({ layerText: displayedLayerText(layerText), typeUnit }) });
 }
 
 /* ------------------------------- XMP -------------------------------- */
