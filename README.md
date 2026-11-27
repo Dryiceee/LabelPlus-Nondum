@@ -8,7 +8,7 @@ LabelPlus-Nondum 是一个 Photoshop 插件（UXP），用来把 LabelPlus 翻�
 
 它杂交并魔改了 [TypeR](https://github.com/ScanR/TypeR) 和 [LabelPlus](https://github.com/LabelPlus/LabelPlus) 的 [PS-Script](https://github.com/LabelPlus/PS-Script)以对接现有的被汉化组广泛采用的基于Labelplus的汉化工作流。
 
-> **使用要求：** 只支持 Windows，需要标准桌面版 **Photoshop 2025（26.0）或更新版本**。更早的 Photoshop 用不了。
+> **使用要求：** 只支持 Windows，需要标准桌面版 **Photoshop 2025（26.0）或更新版本**。
 
 ## 功能
 
