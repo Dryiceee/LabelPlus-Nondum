@@ -2,7 +2,7 @@ import "./footer.scss";
 
 import React from "react";
 import { FiFileText, FiFolderMinus, FiFolderPlus, FiSettings, FiZap } from "react-icons/fi";
-import { MdAdsClick, MdCleaningServices, MdFilterNone, MdOutlineAutoAwesome } from "react-icons/md";
+import { MdAdsClick, MdCleaningServices, MdFilterNone, MdOutlineAutoAwesome, MdOutlineTranslate } from "react-icons/md";
 import { locale } from "../../utils";
 import { useContext } from "../../context";
 import HiddenFileInput from "../hiddenFileInput/hiddenFileInput";
@@ -10,6 +10,7 @@ import Notice from "../notice/notice";
 import { isFooterModeVisible, isWindowTooShortForTextShapeR, withProductLayout } from "../../uiLayout";
 import { toggleTextShapeR } from "../../shortcutCommands";
 import { isSfxAvailable, openSfxEditor } from "../../sfx/openSfx";
+import { isRubyAvailable, openRubyEditor } from "../../ruby/openRuby";
 
 // Shared with Settings > Appearance, which lists the toggles one by one
 export const FOOTER_MODE_ICONS = {
@@ -215,6 +216,12 @@ const AppFooter = React.memo(function AppFooter() {
         {isSfxAvailable() && (
         <button type="button" className="footer-icon-button" data-tour="sfx" title={locale.sfxButtonTitle || "SFX editor"} aria-label={locale.sfxButtonTitle || "SFX editor"} onClick={openSfxEditor}>
           <FiZap size={14} />
+        </button>
+        )}
+        {/* Ruby (行间注) editor: a Photoshop dialog, UXP only (uxp-src/host/ruby.js) */}
+        {isRubyAvailable() && (
+        <button type="button" className="footer-icon-button" data-tour="ruby" title={locale.rubyButtonTitle || "Ruby notes"} aria-label={locale.rubyButtonTitle || "Ruby notes"} onClick={openRubyEditor}>
+          <MdOutlineTranslate size={14} />
         </button>
         )}
         <button type="button" className="footer-icon-button" data-tour="settings" title={locale.footerSettings} aria-label={locale.footerSettings} onClick={openSettings}>

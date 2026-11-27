@@ -96,9 +96,29 @@ const sfxConfig = (env, argv) => {
   });
 };
 
+// The ruby (行间注) editor window (uxp/ruby): the same, for uxp-src/host/ruby.js
+const rubyConfig = (env, argv) => {
+  const panel = panelConfig(env, argv);
+  return Object.assign({}, panel, {
+    name: "uxp-ruby",
+    entry: { ruby: "./uxp-src/ruby/entry.jsx" },
+    output: Object.assign({}, panel.output, {
+      path: path.join(outputPath(env), "ruby"),
+      filename: "ruby.js",
+      chunkFilename: "[name].[contenthash:12].ruby.js",
+      clean: true,
+    }),
+    plugins: [
+      new HtmlWebpackPlugin({ template: "./uxp-src/ruby/index.html", filename: "index.html" }),
+      new MiniCssExtractPlugin({ filename: "ruby.css" }),
+      new webpack.DefinePlugin({ "process.env.TYPER_UXP": JSON.stringify("1"), "process.env.TYPER_DEV": JSON.stringify(env.dev ? "1" : "0") }),
+    ],
+  });
+};
+
 module.exports = (env = {}, argv = {}) => {
   if (env.mac && env.addon) throw new Error("Choose either macOS or Windows addon output");
   if (env.addon && (env.dev || env.trace || env.diagnostic || env.hostTest)) throw new Error("Build the Windows addon preview separately from developer/diagnostic builds");
   if (env.hostTest) return [hostConfig(env, argv, "./uxp-src/host/photoshop.js", "host-test.js", "TypeRHost")];
-  return [hostConfig(env, argv, env.diagnostic ? "./uxp-src/host/diagnosticEntry.js" : env.trace ? "./uxp-src/host/traceEntry.js" : "./uxp-src/host/main.js", "host.js"), panelConfig(env, argv), sfxConfig(env, argv)];
+  return [hostConfig(env, argv, env.diagnostic ? "./uxp-src/host/diagnosticEntry.js" : env.trace ? "./uxp-src/host/traceEntry.js" : "./uxp-src/host/main.js", "host.js"), panelConfig(env, argv), sfxConfig(env, argv), rubyConfig(env, argv)];
 };

@@ -13,6 +13,7 @@ const photoshop = require("./photoshop");
 const smartPaste = require("./smartPaste");
 const labelplus = require("./labelplus");
 const sfx = require("./sfx");
+const ruby = require("./ruby");
 const files = require("./files");
 const keyboard = require("./keyboard");
 const keysHelper = require("./keysHelper");
@@ -450,14 +451,18 @@ const requests = {
   // SFX editor (uxp-src/host/sfx.js): a modal window, open for as long as the
   // user edits, so it stays out of the evalScript queue and its time limit
   sfxOpen: () => sfx.methods.sfxOpen(),
+  // Ruby (行间注) editor (uxp-src/host/ruby.js): a modal window as well
+  rubyOpen: () => ruby.methods.rubyOpen(),
 };
 Object.assign(requests, services.requests);
-sfx.setup({
+const modalWindowOptions = {
   getStrings: () => readLocaleStrings(),
   onDocumentChanged: () => onPhotoshopEvent("set", { _isCommand: true }),
   // Only from a panel that is up and showing (not while the plugin starts)
   canShowWindow: () => !!view && panelVisible && webviewReady && !!document.body,
-});
+};
+sfx.setup(modalWindowOptions);
+ruby.setup(modalWindowOptions);
 
 // Panel requests in the crash trace: evalScript has its own lines, and the
 // storage writes and log lines say nothing about Photoshop
@@ -710,7 +715,7 @@ async function startOnce() {
 const devResultListeners = [];
 if (typeof TYPER_DEV !== "undefined" && TYPER_DEV) {
   require("./devChannel").start(post, (listener) => devResultListeners.push(listener));
-  globalThis.__typer = { photoshop, sfx, files, keyboard, services, methods, requests, post, mirror, getMirror: () => mirrorFiles, getHostEnvironment, onThemeChanged };
+  globalThis.__typer = { photoshop, sfx, ruby, files, keyboard, services, methods, requests, post, mirror, getMirror: () => mirrorFiles, getHostEnvironment, onThemeChanged };
 }
 
 

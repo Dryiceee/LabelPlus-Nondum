@@ -113,7 +113,7 @@ function packageCcx(manifest) {
   };
   walk("");
   const nativeFiles = macBuild ? ["native/typer-keys.json"] : ["win/x64/typer-keys.uxpaddon"];
-  ["manifest.json", "index.html", "host.js", "web/index.html", "web/index.js", "sfx/index.html", "sfx/sfx.js", "locale/messages.properties", ...nativeFiles].forEach((name) => {
+  ["manifest.json", "index.html", "host.js", "web/index.html", "web/index.js", "sfx/index.html", "sfx/sfx.js", "ruby/index.html", "ruby/ruby.js", "locale/messages.properties", ...nativeFiles].forEach((name) => {
     if (!files[name]) throw new Error("Incomplete UXP build: " + name);
   });
   if (!macBuild && Object.keys(files).some((name) => /^native\//.test(name) || /\.(exe|ps1)$/i.test(name))) {

@@ -5,6 +5,7 @@
 
 import { normalizeModel, chars } from "./layout";
 import { roundComponents, bounds, countPoints } from "./outline";
+import { xmpStore } from "../xmpStore";
 
 export const PAYLOAD_VERSION = 1;
 export const XMP_NS = "http://ns.dryiceee.com/labelplus-nondum/sfx/1.0/";
@@ -66,69 +67,14 @@ export function parsePayload(text) {
 
 /* ------------------------------- XMP ------------------------------- */
 
-const escapeXml = (text) => String(text)
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-const unescapeXml = (text) => String(text)
-  .replace(/&#x([0-9a-f]+);/gi, (m, hex) => String.fromCodePoint(parseInt(hex, 16)))
-  .replace(/&#(\d+);/g, (m, dec) => String.fromCodePoint(parseInt(dec, 10)))
-  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&amp;/g, "&");
-
-const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-// The prefix the packet binds to our namespace (an XMP toolkit may rename it)
-function prefixesOf(xmp) {
-  const found = [];
-  const re = new RegExp("xmlns:([A-Za-z_][\\w.-]*)\\s*=\\s*[\"']" + escapeRegExp(XMP_NS) + "[\"']", "g");
-  let match;
-  while ((match = re.exec(xmp))) if (found.indexOf(match[1]) < 0) found.push(match[1]);
-  return found;
-}
+const store = xmpStore(XMP_NS, XMP_PREFIX);
 
 // Our property, written as an element or (compact form) as an attribute
-export function readXmpData(xmp, property = PROPERTY) {
-  const text = String(xmp || "");
-  if (!text) return null;
-  const prefixes = prefixesOf(text);
-  for (const prefix of prefixes) {
-    const name = escapeRegExp(prefix + ":" + property);
-    const element = new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">").exec(text);
-    if (element) return unescapeXml(element[1].trim());
-    const attribute = new RegExp("\\s" + name + "\\s*=\\s*\"([^\"]*)\"").exec(text) || new RegExp("\\s" + name + "\\s*=\\s*'([^']*)'").exec(text);
-    if (attribute) return unescapeXml(attribute[1]);
-  }
-  return null;
-}
-
-const ownDescription = (property, value) =>
-  "<rdf:Description rdf:about=\"\" xmlns:" + XMP_PREFIX + "=\"" + XMP_NS + "\">" +
-  "<" + XMP_PREFIX + ":" + property + ">" + escapeXml(value) + "</" + XMP_PREFIX + ":" + property + ">" +
-  "</rdf:Description>";
-
-const EMPTY_PACKET = (body) =>
-  "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">" + body + "</rdf:RDF></x:xmpmeta>";
-
-// Drop our property wherever the packet holds it
-function removeProperty(xmp, property) {
-  let text = xmp;
-  prefixesOf(text).forEach((prefix) => {
-    const name = escapeRegExp(prefix + ":" + property);
-    text = text.replace(new RegExp("<" + name + "(?:\\s[^>]*)?>[\\s\\S]*?</" + name + ">", "g"), "");
-    text = text.replace(new RegExp("<" + name + "\\s*/>", "g"), "");
-    text = text.replace(new RegExp("\\s" + name + "\\s*=\\s*(\"[^\"]*\"|'[^']*')", "g"), "");
-  });
-  return text;
-}
+export const readXmpData = (xmp, property = PROPERTY) => store.read(xmp, property);
 
 // The layer's XMP with our property set to `value` (null removes it); other
 // metadata in the packet stays as it was
-export function writeXmpData(xmp, value, property = PROPERTY) {
-  const text = removeProperty(String(xmp || ""), property);
-  if (value === null || value === undefined) return text;
-  const own = ownDescription(property, value);
-  if (/<\/rdf:RDF>/.test(text)) return text.replace(/<\/rdf:RDF>/, own + "</rdf:RDF>");
-  return EMPTY_PACKET(own);
-}
+export const writeXmpData = (xmp, value, property = PROPERTY) => store.write(xmp, value, property);
 
 // Document-level fallback: one property per layer ID
 export const layerProperty = (layerId) => "layer" + String(Math.trunc(Number(layerId)) || 0);

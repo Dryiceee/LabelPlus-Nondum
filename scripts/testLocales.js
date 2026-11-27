@@ -41,7 +41,7 @@ const PAGE_BAR_KEYS = [
   "settingsShortcutGroupPages", "settingsGroupPages", "settingsPageOpenAfterImport", "settingsPageOpenAfterImportHint",
   "settingsPageMaxOpen", "settingsPageMaxOpenHint",
 ];
-const isOptionalKey = (localeName, key) => PARTIAL_LOCALES.includes(localeName) || /^(lp|pageNav|sfx)[A-Z]/.test(key) || PAGE_BAR_KEYS.includes(key);
+const isOptionalKey = (localeName, key) => PARTIAL_LOCALES.includes(localeName) || /^(lp|pageNav|sfx|ruby)[A-Z]/.test(key) || PAGE_BAR_KEYS.includes(key);
 const localeNames = fs.readdirSync(path.resolve(rootDir, "locale"), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)

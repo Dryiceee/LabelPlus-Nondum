@@ -1,0 +1,283 @@
+// Ruby (行间注) editor window: Photoshop's dark interface by default
+:root {
+  --rb-bg: #2b2b2b;
+  --rb-panel: #323232;
+  --rb-raised: #3c3c3c;
+  --rb-border: #4a4a4a;
+  --rb-text: #e3e3e3;
+  --rb-muted: #a0a0a0;
+  --rb-accent: #378ef0;
+  --rb-page: #1e1e1e;
+  --rb-warn-bg: #3b3122;
+  --rb-warn: #f2bc76;
+  --rb-warn-text: #fbe3c0;
+  --rb-error: #ff5c5c;
+}
+
+:root.rb-light {
+  --rb-bg: #e6e6e6;
+  --rb-panel: #f0f0f0;
+  --rb-raised: #ffffff;
+  --rb-border: #c8c8c8;
+  --rb-text: #222;
+  --rb-muted: #666;
+  --rb-page: #d0d0d0;
+  --rb-warn-bg: #fff3df;
+  --rb-warn: #b86e00;
+  --rb-warn-text: #5c3700;
+  --rb-error: #d42a2a;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #ruby-root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--rb-bg);
+  color: var(--rb-text);
+  font: 12px/1.4 "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+}
+
+button {
+  font: inherit;
+  color: var(--rb-text);
+  background: var(--rb-raised);
+  border: 1px solid var(--rb-border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  &:hover:not(:disabled) { border-color: var(--rb-muted); }
+  &:disabled { opacity: 0.45; cursor: default; }
+  &.is-primary { background: var(--rb-accent); border-color: var(--rb-accent); color: #fff; }
+}
+
+input[type="text"], input[type="number"], select {
+  font: inherit;
+  color: var(--rb-text);
+  background: var(--rb-bg);
+  border: 1px solid var(--rb-border);
+  border-radius: 3px;
+  padding: 3px 6px;
+  min-width: 0;
+}
+
+.rb-editor {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.rb-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--rb-page);
+}
+
+.rb-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rb-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  cursor: default;
+}
+
+.is-panning .rb-canvas, .is-panning .rb-canvas * { cursor: grab !important; }
+
+.rb-page { fill: #fff; }
+
+.rb-glyph {
+  fill: transparent;
+  stroke: rgba(55, 142, 240, 0.35);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  cursor: text;
+  &:hover { fill: rgba(55, 142, 240, 0.12); }
+  &.is-noted { fill: rgba(55, 142, 240, 0.14); stroke: rgba(55, 142, 240, 0.6); }
+  &.is-active { fill: rgba(55, 142, 240, 0.3); stroke: var(--rb-accent); }
+  &.is-picking { fill: rgba(255, 196, 0, 0.35); stroke: #e6a800; }
+}
+
+.rb-note-box {
+  fill: none;
+  stroke: var(--rb-accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  &.is-active { stroke-dasharray: none; stroke-width: 1.5; }
+  &.is-collision { stroke: var(--rb-error); stroke-dasharray: none; stroke-width: 2; }
+}
+
+.rb-base { pointer-events: none; }
+
+.rb-sep { width: 1px; height: 16px; background: var(--rb-border); margin: 0 4px; }
+
+.rb-note-text {
+  pointer-events: none;
+}
+
+.rb-note-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.rb-notices {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.rb-notice {
+  pointer-events: all;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--rb-warn-bg);
+  color: var(--rb-warn-text);
+  border: 1px solid var(--rb-warn);
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  span:first-child { flex: 1; }
+}
+
+.rb-viewbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--rb-border);
+  background: var(--rb-panel);
+  button { white-space: nowrap; flex-shrink: 0; }
+  .rb-zoom { color: var(--rb-muted); min-width: 44px; text-align: right; flex-shrink: 0; }
+  .rb-help { color: var(--rb-muted); margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+.rb-side {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--rb-panel);
+  border-left: 1px solid var(--rb-border);
+}
+
+.rb-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.rb-head {
+  margin-bottom: 10px;
+  .rb-mode { font-weight: 600; }
+  .rb-meta { color: var(--rb-muted); margin-top: 2px; word-break: break-all; }
+}
+
+.rb-hint {
+  color: var(--rb-muted);
+  padding: 8px 10px;
+  border: 1px dashed var(--rb-border);
+  border-radius: 4px;
+  margin-bottom: 10px;
+  &.is-picking { color: var(--rb-warn-text); background: var(--rb-warn-bg); border-color: var(--rb-warn); }
+}
+
+.rb-note {
+  border: 1px solid var(--rb-border);
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--rb-bg);
+  &.is-active { border-color: var(--rb-accent); }
+  &.has-error { border-color: var(--rb-error); }
+}
+
+.rb-note-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  .rb-note-span { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rb-note-number { color: var(--rb-muted); }
+}
+
+.rb-note-error {
+  color: var(--rb-error);
+  margin: -2px 0 6px;
+}
+
+.rb-note-warn {
+  color: var(--rb-warn);
+  margin: -2px 0 6px;
+}
+
+.rb-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+  .rb-field-label { width: 64px; flex-shrink: 0; color: var(--rb-muted); }
+  input[type="text"] { flex: 1; }
+  input[type="number"] { width: 72px; }
+  select { flex: 1; }
+  .rb-unit { color: var(--rb-muted); }
+}
+
+.rb-segmented {
+  display: flex;
+  flex: 1;
+  button {
+    flex: 1;
+    border-radius: 0;
+    padding: 3px 4px;
+    &:first-child { border-radius: 4px 0 0 4px; }
+    &:last-child { border-radius: 0 4px 4px 0; }
+    & + button { border-left: none; }
+    &.is-active { background: var(--rb-accent); border-color: var(--rb-accent); color: #fff; }
+  }
+}
+
+.rb-note-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 6px;
+  button { padding: 2px 8px; }
+}
+
+.rb-link {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  color: var(--rb-accent);
+  &:hover:not(:disabled) { text-decoration: underline; }
+}
+
+.rb-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--rb-border);
+}
