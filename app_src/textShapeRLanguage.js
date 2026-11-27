@@ -1,14 +1,8 @@
-// Language of the text being shaped, and where its words may break. A script
-// can be in another language than the interface, so the text decides; the
-// interface language only settles texts too short to tell.
+// Language of the text being shaped. A script can be in another language than
+// the interface, so the text decides; the interface language only settles
+// texts too short to tell. (The hyphen pattern library is gone: words break
+// only on TextShapeR's own French syllable rules.)
 
-import createHyphenator from "./oneClick/hyphen/hyphenEngine.js";
-// Filled by registerTextShapeRPatterns when TextShapeR opens
-let patterns = {};
-const hyphenators = {};
-const registerTextShapeRPatterns = (loaded) => {
-  patterns = loaded || {};
-};
 const SUPPORTED_LANGUAGES = ["de", "en", "es", "fr", "it", "pt", "ru", "tr", "uk"];
 
 // Everyday words that tell the languages apart: words shared between them
@@ -81,24 +75,4 @@ const resolveTextLanguage = (text) => {
   return detectLanguage(source) || interfaceLanguage;
 };
 
-const getHyphenator = (language) => {
-  if (!patterns[language]) return null;
-  if (!hyphenators[language]) hyphenators[language] = createHyphenator(patterns[language], { minWordLength: 4 });
-  return hyphenators[language];
-};
-
-// Offsets inside a word where its language allows a line break
-const getLanguageBreakPoints = (language, word) => {
-  const hyphenator = getHyphenator(language);
-  if (!hyphenator) return [];
-  const sections = hyphenator(word).split("­");
-  const points = [];
-  let offset = 0;
-  for (let index = 0; index + 1 < sections.length; index++) {
-    offset += sections[index].length;
-    points.push(offset);
-  }
-  return points;
-};
-
-export { detectLanguage, getInterfaceHint, getLanguageBreakPoints, registerTextShapeRPatterns, resolveTextLanguage, setTextShapeRInterfaceLanguage };
+export { detectLanguage, getInterfaceHint, resolveTextLanguage, setTextShapeRInterfaceLanguage };

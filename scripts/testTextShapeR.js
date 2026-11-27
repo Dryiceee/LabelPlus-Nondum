@@ -39,7 +39,6 @@ const {
   isTextShapeRLineModelStale,
   recordTextShapeRFeedback,
   refitTextShapeRLineModel,
-  registerTextShapeRPatterns,
   retrainTextShapeRRanker,
   sanitizeTextShapeRTuning,
   scheduleTextShapeRLineModelRefit,
@@ -49,7 +48,6 @@ const {
   visibleWidth,
 } = loadAppModule("app_src/textShapeR.js");
 
-registerTextShapeRPatterns(loadAppModule("app_src/textShapeRPatterns.js").default);
 
 const shippedDefaultTuning = require("../app_src/textShapeRDefaultTuning.json");
 assert.strictEqual(shippedDefaultTuning.samples, 178);
@@ -81,10 +79,14 @@ if (bestLengths.length > 2) {
   assert.ok(Math.abs(bestLengths[0] - bestLengths[1]) <= 6);
 }
 
-const hyphenated = generateTextShapeRVariants("extraordinarily shaped lettering can fit better", { limit: 10 });
+// English has no break rules since the hyphen patterns went: it never hyphenates
+const english = generateTextShapeRVariants("extraordinarily shaped lettering can fit better", { limit: 10 });
+assert.ok(english.every((variant) => !/-\n/.test(variant.text)));
+
+const hyphenated = generateTextShapeRVariants("malheureusement personnellement extraordinairement", { limit: 10 });
 assert.ok(hyphenated.some((variant) => /-\n/.test(variant.text)));
 
-const noHyphen = generateTextShapeRVariants("extraordinarily shaped lettering can fit better", { limit: 10, allowHyphenation: false });
+const noHyphen = generateTextShapeRVariants("malheureusement personnellement extraordinairement", { limit: 10, allowHyphenation: false });
 assert.ok(noHyphen.every((variant) => !/-\n/.test(variant.text)));
 
 const markdown = generateTextShapeRVariants("A **bold sentence** should keep markdown markers safe", { limit: 10 });
@@ -122,15 +124,14 @@ assert.ok(generateTextShapeRVariants("D'accord, mais alors vite.", { limit: 12 }
 const cesuresOf = (text) => generateTextShapeRVariants(text, { limit: 12 })
   .filter((variant) => variant.hyphenCount)
   .map((variant) => variant.lines.find((line) => /-$/.test(line)).split(" ").pop());
-const englishCesures = cesuresOf("I remember everything that happened together in the dangerous mountains.");
-assert.ok(englishCesures.length, "English text gets cesures");
-["eve-", "happe-", "toge-", "dange-"].forEach((wrong) => assert.ok(!englishCesures.includes(wrong), `English breaks with French rules: ${wrong}`));
-assert.ok(englishCesures.some((fragment) => /^(?:re-|re-mem-|every-|hap-|to-|to-geth-|dan-|dan-ger-|moun-)$/.test(fragment)), `unexpected English cesures: ${englishCesures}`);
-assert.ok(cesuresOf("Я не понимаю, что происходит здесь, пожалуйста, объясни мне.").length, "Cyrillic text gets cesures");
+// Only French has break rules (TextShapeR's syllables): the other languages
+// lost theirs with the hyphen pattern library and never get French cesures
+assert.ok(!cesuresOf("I remember everything that happened together in the dangerous mountains.").length, "English is not hyphenated");
+assert.ok(!cesuresOf("Я не понимаю, что происходит здесь, пожалуйста, объясни мне.").length, "Cyrillic is not hyphenated");
 assert.ok(!cesuresOf("لا أفهم ما يحدث هنا الآن يا صديقي العزيز والجميل").length, "Arabic is never hyphenated");
 setDehyphenationEnabled(true);
-assert.ok(generateTextShapeRVariants("some- thing is well- known to- gether", { limit: 12 }).some((variant) => variant.lines.join(" ") === "something is well-known together"),
-  "English cesures are joined and English compounds kept");
+assert.ok(generateTextShapeRVariants("some- thing is well- known", { limit: 12 }).some((variant) => variant.lines.join(" ") === "some-thing is well-known"),
+  "outside French a hyphen is kept as written");
 setDehyphenationEnabled(false);
 
 const short = generateTextShapeRVariants("Bonjour");

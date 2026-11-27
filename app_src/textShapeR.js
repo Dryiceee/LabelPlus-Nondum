@@ -1,5 +1,5 @@
 import defaultTextShapeRTuning from "./textShapeRDefaultTuning.json";
-import { getInterfaceHint, getLanguageBreakPoints, registerTextShapeRPatterns, resolveTextLanguage, setTextShapeRInterfaceLanguage } from "./textShapeRLanguage.js";
+import { getInterfaceHint, resolveTextLanguage, setTextShapeRInterfaceLanguage } from "./textShapeRLanguage.js";
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const VOWELS = "aeiouyAEIOUY\u00e0\u00e2\u00e4\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f6\u00f9\u00fb\u00fc\u00c0\u00c2\u00c4\u00c9\u00c8\u00ca\u00cb\u00ce\u00cf\u00d4\u00d6\u00d9\u00db\u00dc";
@@ -116,11 +116,8 @@ const isRealCompound = (before, after, language) => {
   const right = after.toLowerCase();
   // Stutter ("B- bon", "N- non"): the fragment repeats the start of the word
   if (left.length <= 3 && right.startsWith(left)) return true;
-  if (language !== "fr") {
-    if (language === "en" && ENGLISH_COMPOUND_START.test(left)) return true;
-    // Where the language's own rules cannot break the word, the hyphen is real
-    return !getLanguageBreakPoints(language, left + right).includes(left.length);
-  }
+  // Only French has break rules to call a split a cesure: elsewhere the hyphen is real
+  if (language !== "fr") return true;
   if (KNOWN_COMPOUNDS.has(`${left}-${right}`.replace(/’/g, "'"))) return true;
   if (right === "ce") return COMPOUND_CE_BEFORE.test(before);
   return COMPOUND_ENDINGS.has(right) && !CESURE_WORDS_WITH_COMPOUND_ENDING.has(left + right);
@@ -904,17 +901,15 @@ const computeLetteringSplits = (word, language) => {
   if (!language || body.length < LETTERING_MIN_WORD) return [];
   // Only languages that elide cut around an apostrophe: "don't" stays whole
   if (/['’]/.test(body) && language !== "fr" && language !== "it") return [];
-  const patternPoints = getLanguageBreakPoints(language, body.replace(/’/g, "'"));
-  const syllablePoints = language === "fr" && !/['’]/.test(body)
+  const points = language === "fr" && !/['’]/.test(body)
     ? computeSyllableSplits(body, punctuation, 0, 3).map((split) => split.index)
     : [];
-  const points = new Set(patternPoints.concat(syllablePoints));
-  return Array.from(points)
+  return points
     .filter((index) => index >= LETTERING_MIN_FRAGMENT && body.length - index >= LETTERING_MIN_REST)
     .map((index) => ({
       index,
-      // Points both rule sets agree on come first, then the most central ones
-      penalty: (patternPoints.includes(index) && syllablePoints.includes(index) ? 0 : 20) + Math.abs(index - body.length / 2),
+      // The most central points first
+      penalty: Math.abs(index - body.length / 2),
       prefix: `${body.slice(0, index)}-`,
       suffix: body.slice(index) + punctuation,
     }))
@@ -3185,4 +3180,4 @@ const recordTextShapeRFeedback = (layerText, options = {}, currentTuning = null)
   };
 };
 
-export { registerTextShapeRPatterns, setTextShapeRInterfaceLanguage, frenchHyphenPoints, generateTextShapeRVariants, generateManualTextShapeRVariant, estimateManualLineCount, setDehyphenationEnabled, setTextShapeRTuning, sanitizeTuning as sanitizeTextShapeRTuning, recordTextShapeRFeedback, retrainTextShapeRRanker, isTextShapeRLineModelStale, refitTextShapeRLineModel, scheduleTextShapeRLineModelRefit, visibleLength, visibleWidth };
+export { setTextShapeRInterfaceLanguage, frenchHyphenPoints, generateTextShapeRVariants, generateManualTextShapeRVariant, estimateManualLineCount, setDehyphenationEnabled, setTextShapeRTuning, sanitizeTuning as sanitizeTextShapeRTuning, recordTextShapeRFeedback, retrainTextShapeRRanker, isTextShapeRLineModelStale, refitTextShapeRLineModel, scheduleTextShapeRLineModelRefit, visibleLength, visibleWidth };

@@ -159,4 +159,3 @@ npm run package:release
 
 - [TypeR](https://github.com/ScanR/TypeR)，作者 Sakushi 和 SeanR（基于 Swirt 的 TypeR tools），MIT 许可证
 - [LabelPlus](https://github.com/LabelPlus/LabelPlus) 和 [PS-Script](https://github.com/LabelPlus/PS-Script)，GNU GPL 第 2 版
-- [hyphen](https://github.com/ytiurin/hyphen)，作者 Yevhen Tiurin，ISC 许可证

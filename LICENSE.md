@@ -22,8 +22,6 @@ LabelPlus-Nondum is built on the work of others:
 - **LabelPlus** (https://github.com/LabelPlus/LabelPlus) and its **PS-Script**
   (https://github.com/LabelPlus/PS-Script), under the GNU GPL version 2. The
   LabelPlus text format and the import workflow follow them.
-- **hyphen** by Yevhen Tiurin (https://github.com/ytiurin/hyphen), under the
-  ISC license, in app_src/oneClick/hyphen (see its LICENSE.txt).
 
 ## TypeR license (MIT)
 
