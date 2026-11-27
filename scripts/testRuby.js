@@ -122,6 +122,19 @@ const exact = (str, size, tracking = 0, scale = 1) => {
   plan = layout.planNote(span, note({ align: "spread" }), exact);
   near(plan.tracking, (2 * (100 / 4) / 50) * 1000, 1e-9);
   near(plan.length, 150, 1e-9, "ink ends half a share from each end");
+  assert.strictEqual(layout.normalizeNote({}).distribute, "121", "1-2-1 by default");
+  assert.strictEqual(layout.normalizeNote({ distribute: "x" }).distribute, "121");
+  // 0-1-0: all the room between the characters, flush with both ends
+  plan = layout.planNote(span, note({ align: "spread", distribute: "010" }), exact);
+  near(plan.tracking, (100 / 50) * 1000, 1e-9);
+  near(plan.length, 200, 1e-9, "the note runs end to end");
+  near(layout.placeNote(span, plan, note({ align: "spread", distribute: "010" }), true).main0, 300, 1e-9, "starts with the characters");
+  // 0-1-0 with one note character has no gap to fill: centred
+  plan = layout.planNote(span, note({ align: "spread", distribute: "010", text: "晴" }), exact);
+  near(plan.tracking, 0, 1e-9);
+  near(layout.placeNote(span, plan, note({ align: "spread", distribute: "010", text: "晴" }), true).main0, 375, 1e-9);
+  // The payload keeps it
+  assert.strictEqual(payload.parsePayload(payload.buildPayload({ note: note({ distribute: "010" }), baseId: 1, baseText: "一二晴朗五", deltas: [], leading: [] })).note.distribute, "010");
 
   // Longer than its characters: 8 characters at 50 px = 400 > 200
   const long = (extra) => note(Object.assign({ text: "这是一个很长的注" }, extra));
@@ -193,8 +206,10 @@ const exact = (str, size, tracking = 0, scale = 1) => {
   near(big.room[0].required, 50 + 69 + 50, 1e-9, "the biggest note of the line decides");
   assert.deepStrictEqual(big.room[0].indices, [7, 8, 9]);
   assert.deepStrictEqual(big.room[0].before, [0, 1, 2, 3, 4, 5, 6], "the line before, with its line break");
-  assert.deepStrictEqual(layout.leadingTarget(big.room[0], "leadingAbove"), big.room[0].before, "top to top: the line before holds the distance");
-  assert.deepStrictEqual(layout.leadingTarget(big.room[0], "leadingBelow"), big.room[0].indices, "Roman: the line itself");
+  assert.deepStrictEqual(layout.leadingTarget(big.room[0], "leadingAbove", true), big.room[0].before, "top to top: the line before holds the distance");
+  assert.deepStrictEqual(layout.leadingTarget(big.room[0], "leadingBelow", true), big.room[0].before, "vertical text counts leading to the next line in either mode");
+  assert.deepStrictEqual(layout.leadingTarget(big.room[0], "leadingAbove", false), big.room[0].before);
+  assert.deepStrictEqual(layout.leadingTarget(big.room[0], "leadingBelow", false), big.room[0].indices, "horizontal Roman: the line itself");
   assert.strictEqual(ranges.leadingTypeAt({ paragraphStyleRange: [{ from: 0, to: 3, paragraphStyle: { leadingType: "leadingBelow" } }] }, 1), "leadingBelow");
   assert.deepStrictEqual(layout.layoutNotes({ glyphs, ems, vertical: true, measure: exact, notes: [{ id: "a", start: 0, end: 2, text: "注", size: 90 }] }).room, [], "the first line has no line before it");
   near(layout.layoutNotes({ glyphs, ems, vertical: true, measure: exact, notes: [{ id: "a", start: 7, end: 9, text: "注", size: 60, gap: 0.2 }] }).room[0].required, 50 + 20 + 69 + 50, 1e-9, "the gap counts");

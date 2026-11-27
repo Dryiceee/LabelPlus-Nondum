@@ -26,7 +26,7 @@ export function buildPayload({ note, baseId, baseText, deltas, leading }) {
     kind: "note",
     base: Number(baseId) || 0,
     note: {
-      start: note.start, end: note.end, text: note.text, align: note.align, overflow: note.overflow,
+      start: note.start, end: note.end, text: note.text, align: note.align, distribute: note.distribute, overflow: note.overflow,
       size: note.size, ratio: note.ratio, gap: note.gap,
     },
     span: list.slice(note.start, note.end).join(""),

@@ -7,8 +7,11 @@
 // A note:
 //   { id, start, end,      characters [start, end) of the base text
 //     text,                the note
-//     align,               "center" | "start" | "spread" (1-2-1: room shared
-//                          out between the note's characters)
+//     align,               "center" | "start" | "spread" (room shared out
+//                          between the note's characters)
+//     distribute,          how "spread" shares the room: "121" (half a share
+//                          at each end, a share between characters) or "010"
+//                          (none at the ends: the note runs end to end)
 //     overflow,            longer than its characters: "shrink" (smaller
 //                          size), "squeeze" (narrower characters),
 //                          "overhang" (as it is) or "spread" (the base
@@ -24,9 +27,10 @@
 import { chars, isBlank, isLineBreak, isFullWidth, advance } from "./text";
 import { lineGeometry } from "./measure";
 
-export const ALIGNS = ["center", "start", "spread"];
+export const ALIGNS = ["spread", "center", "start"];
+export const DISTRIBUTES = ["121", "010"];
 export const OVERFLOWS = ["shrink", "squeeze", "overhang", "spread"];
-export const DEFAULTS = { align: "spread", overflow: "shrink", ratio: 0.5, gap: 0 };
+export const DEFAULTS = { align: "spread", distribute: "121", overflow: "shrink", ratio: 0.5, gap: 0 };
 export const LIMITS = {
   ratio: [0.1, 2],
   gap: [-1, 4],
@@ -51,6 +55,7 @@ export function normalizeNote(raw, index = 0) {
     end,
     text: typeof source.text === "string" ? source.text.replace(/[\r\n\u0003]+/g, "") : "",
     align: ALIGNS.indexOf(source.align) >= 0 ? source.align : DEFAULTS.align,
+    distribute: DISTRIBUTES.indexOf(source.distribute) >= 0 ? source.distribute : DEFAULTS.distribute,
     overflow: OVERFLOWS.indexOf(source.overflow) >= 0 ? source.overflow : DEFAULTS.overflow,
     size: size !== null && isFinite(size) && size > 0 ? clamp(size, LIMITS.size[0], LIMITS.size[1]) : null,
     ratio: clamp(finite(Number(source.ratio), DEFAULTS.ratio), LIMITS.ratio[0], LIMITS.ratio[1]),
@@ -139,8 +144,11 @@ export function planNote(span, note, measure) {
     }
     overhang = baseExtra === 0 && L > B + EPS;
   } else if (note.align === "spread" && count > 1 && L > 0) {
-    const room = (B - L) / (2 * count);
-    tracking = ((2 * room) / size) * 1000;
+    // Tracking goes between the note's characters; the note is centred, so
+    // what is left over sits at its two ends. 1-2-1: B - L shared out as
+    // 2 x count halves, one at each end. 0-1-0: all of it between them.
+    const between = note.distribute === "010" ? (B - L) / (count - 1) : (B - L) / count;
+    tracking = (between / size) * 1000;
     L = measure(note.text, size, tracking, 1);
   }
   return { size, tracking, scale, length: L, baseExtra, overhang };
@@ -262,14 +270,14 @@ export function lineRoom(glyphs, ems, vertical, items) {
 }
 
 // The characters whose leading sets the distance between a line and the
-// line before it. Photoshop 28, point text, both orientations: with the
-// default leading type ("leadingAbove", top to top) a line's leading is the
-// distance to the NEXT line, so it is the line before that changes; with
-// "leadingBelow" (Roman, from the line before) it is the line itself.
-// Checked on 2026-11-27; the host measures again and swaps if a Photoshop
-// version does it the other way.
-export function leadingTarget(entry, leadingType) {
-  return leadingType === "leadingBelow" ? entry.indices : entry.before;
+// line before it. Photoshop 28, point text, probed 2026-11-27: a line's
+// leading is its distance to the NEXT line, so it is the line before that
+// changes, in vertical text with either leading type and in horizontal text
+// with the default "leadingAbove". Only horizontal "leadingBelow" (Roman)
+// counts it from the line before: there it is the line itself. The host
+// measures again and flips every line if a Photoshop version differs.
+export function leadingTarget(entry, leadingType, vertical) {
+  return !vertical && leadingType === "leadingBelow" ? entry.indices : entry.before;
 }
 
 // Every note at once:

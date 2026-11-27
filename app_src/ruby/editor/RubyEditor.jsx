@@ -32,6 +32,9 @@ const FALLBACK = {
   rubyAlignStartV: "Top",
   rubyAlignStartH: "Left",
   rubyAlignSpread: "Spread",
+  rubyDistribute: "Spread as",
+  rubyDistribute121Title: "Half a gap at each end, a full gap between characters",
+  rubyDistribute010Title: "Flush with both ends, the gaps only between characters",
   rubyOverflow: "Too long",
   rubyOverflowShrink: "Smaller size",
   rubyOverflowSqueeze: "Narrower characters",
@@ -82,8 +85,8 @@ const newId = () => "e" + Date.now().toString(36) + (nextId++);
 function Segmented({ value, options, onChange }) {
   return (
     <div className="rb-segmented">
-      {options.map(([key, label]) => (
-        <button key={key} type="button" className={value === key ? "is-active" : ""} onClick={() => onChange(key)}>{label}</button>
+      {options.map(([key, label, title]) => (
+        <button key={key} type="button" className={value === key ? "is-active" : ""} title={title} onClick={() => onChange(key)}>{label}</button>
       ))}
     </div>
   );
@@ -463,7 +466,8 @@ export default function RubyEditor({ init, bridge }) {
     );
   };
 
-  const alignOptions = [["center", t("rubyAlignCenter")], ["start", t(vertical ? "rubyAlignStartV" : "rubyAlignStartH")], ["spread", t("rubyAlignSpread")]];
+  const alignOptions = [["spread", t("rubyAlignSpread")], ["center", t("rubyAlignCenter")], ["start", t(vertical ? "rubyAlignStartV" : "rubyAlignStartH")]];
+  const distributeOptions = [["121", "1-2-1", t("rubyDistribute121Title")], ["010", "0-1-0", t("rubyDistribute010Title")]];
 
   return (
     <div className={"rb-editor" + (panning ? " is-panning" : "")}>
@@ -559,6 +563,12 @@ export default function RubyEditor({ init, bridge }) {
                   <span className="rb-field-label">{t("rubyAlign")}</span>
                   <Segmented value={note.align} options={alignOptions} onChange={(align) => update(note.id, { align })} />
                 </div>
+                {note.align === "spread" ? (
+                  <div className="rb-field">
+                    <span className="rb-field-label">{t("rubyDistribute")}</span>
+                    <Segmented value={note.distribute} options={distributeOptions} onChange={(distribute) => update(note.id, { distribute })} />
+                  </div>
+                ) : null}
                 <label className="rb-field">
                   <span className="rb-field-label">{t("rubyOverflow")}</span>
                   <select value={note.overflow} onChange={(event) => update(note.id, { overflow: event.target.value })}>

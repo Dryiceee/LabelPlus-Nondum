@@ -568,7 +568,7 @@ async function applyNotes(session, rawNotes) {
     const offsets = utf16Offsets(chars(clean.textKey));
     const layerScale = transformScale(clean.transform);
     room.forEach((entry) => {
-      entry.target = leadingTarget(entry, leadingTypeAt(clean, offsets[entry.indices[0]] || 0));
+      entry.target = leadingTarget(entry, leadingTypeAt(clean, offsets[entry.indices[0]] || 0), measured.vertical);
       entry.value = Math.round((pixelsToTypeUnit(entry.required, jam.typeUnit, info.resolution) / layerScale) * 100) / 100;
     });
     const withLeading = () => room.reduce((text, entry) => setLeading(text, entry.target, entry.value), tracked);
@@ -576,13 +576,25 @@ async function applyNotes(session, rawNotes) {
       setJamText(baseId, withLeading(), jam.typeUnit);
       measured = await measureBase(info, baseId, null);
       lines = lineGeometry(measured.glyphs, measured.vertical);
-      // A Photoshop version that counts leading the other way: the other line
-      const missed = room.filter((entry) => lines[entry.line] && lines[entry.line - 1] && Math.abs(lines[entry.line].cross - lines[entry.line - 1].cross) < entry.required - 1);
-      if (missed.length) {
-        missed.forEach((entry) => { entry.target = entry.target === entry.before ? entry.indices : entry.before; });
-        setJamText(baseId, withLeading(), jam.typeUnit);
-        measured = await measureBase(info, baseId, null);
-        lines = lineGeometry(measured.glyphs, measured.vertical);
+      // A Photoshop version that counts leading the other way: every line
+      // flipped together (one line's leading moves the lines after it, so
+      // flipping only the lines that missed can undo the room of another),
+      // kept only if fewer lines miss
+      const missedNow = () => room.filter((entry) => lines[entry.line] && lines[entry.line - 1] && Math.abs(lines[entry.line].cross - lines[entry.line - 1].cross) < entry.required - 1).length;
+      const missed = missedNow();
+      if (missed) {
+        const flip = () => room.forEach((entry) => { entry.target = entry.target === entry.before ? entry.indices : entry.before; });
+        const relayout = async () => {
+          setJamText(baseId, withLeading(), jam.typeUnit);
+          measured = await measureBase(info, baseId, null);
+          lines = lineGeometry(measured.glyphs, measured.vertical);
+        };
+        flip();
+        await relayout();
+        if (missedNow() >= missed) {
+          flip();
+          await relayout();
+        }
       }
     }
     // The leading each note's room replaced, kept with the note to put back

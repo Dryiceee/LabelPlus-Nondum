@@ -5,6 +5,7 @@
 //
 //   node scripts/rubyLiveCheck.js            everything
 //   node scripts/rubyLiveCheck.js --window   the real editor window only
+//   node scripts/rubyLiveCheck.js --distribute | --second   one part only
 //
 // Works on documents it creates itself (closed at the end, without saving),
 // and on a PSD it saves in the channel folder.
@@ -379,6 +380,58 @@ async function checkLeading() {
   soft("undo", () => near(u[0] - u[1], 90, 2, "undo puts the leading back"));
 }
 
+// A note on column 2, applied; the editor opened again from the group and a
+// note added on column 3: both columns must make room (reported 2026-11-27)
+async function checkSecondSession(autoLeading, below) {
+  const centres = (glyphs) => {
+    const lines = {};
+    glyphs.forEach((g) => { if (g.box) (lines[g.line] = lines[g.line] || []).push((g.box.left + g.box.right) / 2); });
+    return Object.keys(lines).sort().map((k) => lines[k].reduce((a, b) => a + b, 0) / lines[k].length);
+  };
+  const out = await run(`
+    let id = 0;
+    await modal(async () => {
+      await ps.app.createDocument({ width: 1200, height: 1100, resolution: 72, fill: "white", mode: "RGBColorMode", name: "Ruby second" });
+      const v = await doc().createTextLayer({ contents: "区和符号肥沃的\\r达斯科群岛去哦我\\r诉求我去过而王鹏", fontSize: 80, position: { x: 900, y: 100 }, fontName: cjkFont() });
+      v.textItem.orientation = "vertical";
+      id = v.id;
+      await select(id);
+      const t = host._getLayerText();
+      if (!${!!autoLeading}) t.layerText.textStyleRange = t.layerText.textStyleRange.map((r) => Object.assign({}, r, { textStyle: Object.assign({}, r.textStyle, { autoLeading: false, leading: 90 }) }));
+      if (${!!below}) t.layerText.paragraphStyleRange = t.layerText.paragraphStyleRange.map((r) => Object.assign({}, r, { paragraphStyle: Object.assign({}, r.paragraphStyle, { leadingType: "leadingBelow" }) }));
+      play({ _obj: "set", _target: [{ _ref: "layer", _id: id }], to: host.jamText.toLayerTextObject(t) });
+    });
+    const before = await measureNow(id);
+    await select(id);
+    let s = await R.startSession();
+    const first = await R.applyNotes(s, [{ id: "a", start: 8, end: 11, text: "测测测", ratio: ${autoLeading ? 1 : 0.5} }]);
+    const once = await measureNow(id);
+    await select(first.groupId);
+    s = await R.startSession();
+    const reopened = { notes: s.notes.map((n) => [n.start, n.end, n.text]), takeBack: s.takeBack };
+    const second = await R.applyNotes(s, s.notes.concat([{ id: "b", start: 17, end: 20, text: "测测测", ratio: ${autoLeading ? 1 : 0.5} }]));
+    const twice = await measureNow(id);
+    const notes = notesOf(second.groupId).map((n) => ({ text: n.payload.note.text, start: n.payload.note.start, bounds: n.bounds, leading: n.payload.leading }));
+    const leadingNow = host.jamText ? null : null;
+    await select(id);
+    const tk = play({ _obj: "get", _target: [{ _property: "textKey" }, { _ref: "layer", _id: id }] }).textKey;
+    const styles = tk.textStyleRange.map((r) => ({ from: r.from, to: r.to, autoLeading: r.textStyle.autoLeading, leading: r.textStyle.leading && (r.textStyle.leading._value || r.textStyle.leading) }));
+    await modal(async () => { await doc().closeWithoutSaving(); });
+    return { before, once, twice, reopened, notes, styles, room1: first.room, room2: second.room };
+  `, 300000);
+  const b = centres(out.before);
+  const o = centres(out.once);
+  const t = centres(out.twice);
+  log("second session " + (autoLeading ? "auto" : "90") + (below ? " leadingBelow" : ""), JSON.stringify({ before: b.map(Math.round), once: o.map(Math.round), twice: t.map(Math.round) }));
+  log("  reopened", JSON.stringify(out.reopened));
+  log("  room1", JSON.stringify(out.room1), "room2", JSON.stringify(out.room2));
+  log("  styles", JSON.stringify(out.styles));
+  log("  notes", JSON.stringify(out.notes));
+  soft("first note room", () => assert.ok(o[0] - o[1] > b[0] - b[1] + 10, "column 2 moved away for its note"));
+  soft("first stays", () => near(t[0] - t[1], o[0] - o[1], 1, "column 2 keeps its room"));
+  soft("second note room", () => assert.ok(t[1] - t[2] > b[1] - b[2] + 10, "column 3 moved away for its note: " + (t[1] - t[2]) + " vs " + (b[1] - b[2])));
+}
+
 async function checkWindow() {
   // The real window, driven through the page's dev hook
   const opened = await run(`
@@ -426,8 +479,64 @@ async function checkWindow() {
   assert.ok(result.state.notes.some((n) => n.text === "窗口注" && n.end - n.start === 2), "the picked note");
 }
 
+// 均分方式: the same note spread 1-2-1 (half a gap at each end) and 0-1-0
+// (flush with the ends of its characters), measured on the real note layers
+async function checkDistribute() {
+  const out = await run(`
+    const font = cjkFont();
+    await modal(async () => {
+      await ps.app.createDocument({ width: 1200, height: 1000, resolution: 72, fill: "white", mode: "RGBColorMode", name: "Ruby distribute" });
+      const v = await doc().createTextLayer({ contents: "四个字的\\r四个字的", fontSize: 100, position: { x: 800, y: 150 }, fontName: font });
+      v.textItem.orientation = "vertical";
+      v.name = "spread";
+    });
+    const base = byName("spread");
+    await select(base.id);
+    const s = await R.startSession();
+    const done = await R.applyNotes(s, [
+      { id: "a", start: 0, end: 4, text: "注释文", align: "spread", distribute: "121" },
+      { id: "b", start: 5, end: 9, text: "注释文", align: "spread", distribute: "010" },
+    ]);
+    return { glyphs: (await measureNow(base.id)), notes: notesOf(done.groupId) };
+  `, 180000);
+  const slot = (from, to) => {
+    const first = out.glyphs[from].box;
+    const last = out.glyphs[to - 1].box;
+    return { start: (first.top + first.bottom) / 2 - 50, end: (last.top + last.bottom) / 2 + 50 };
+  };
+  const byDistribute = (d) => out.notes.find((n) => n.payload.note.distribute === d);
+  const a = byDistribute("121");
+  const b = byDistribute("010");
+  assert.ok(a && b, "both notes written, with their 均分方式 in the payload");
+  const sa = slot(0, 4);
+  const sb = slot(5, 9);
+  const ends = (note, s) => ({ lead: note.bounds.top - s.start, trail: s.end - note.bounds.bottom, length: note.bounds.bottom - note.bounds.top });
+  const ea = ends(a, sa);
+  const eb = ends(b, sb);
+  log("distribute", JSON.stringify({ "121": ea, "010": eb }));
+  soft("1-2-1 centred", () => near(ea.lead, ea.trail, 4, "the same room at both ends"));
+  soft("1-2-1 room", () => assert.ok(ea.lead > 30, "half a gap at each end: " + ea.lead));
+  soft("0-1-0 flush top", () => near(eb.lead, 0, 6, "the note starts with its characters"));
+  soft("0-1-0 flush bottom", () => near(eb.trail, 0, 6, "the note ends with its characters"));
+  soft("0-1-0 longer", () => assert.ok(eb.length > ea.length + 40, "0-1-0 runs further than 1-2-1"));
+}
+
 (async () => {
   const windowOnly = process.argv.includes("--window");
+  const only = process.argv.includes("--distribute") ? [checkDistribute] : process.argv.includes("--second") ? [() => checkSecondSession(false), () => checkSecondSession(true), () => checkSecondSession(true, true), () => checkSecondSession(false, true)] : null;
+  if (only) {
+    try {
+      for (const check of only) await check();
+      if (failures.length) throw new Error(failures.length + " check(s) failed:\n" + failures.join("\n"));
+      console.log("Ruby check passed");
+    } catch (error) {
+      console.error(error);
+      process.exitCode = 1;
+    } finally {
+      try { await run(`await modal(async () => { while (ps.app.documents.length && /^Ruby/.test(doc().name)) await doc().closeWithoutSaving(); }); return 0;`, 30000); } catch (error) {}
+    }
+    return;
+  }
   try {
     if (!windowOnly) {
       const setup = await setupDocument();
@@ -437,6 +546,10 @@ async function checkWindow() {
       await checkRollback(v.base);
       await checkSaveReopen(v.groupId);
       await checkLeading();
+      await checkDistribute();
+      await checkSecondSession(false);
+      await checkSecondSession(true, true);
+      await checkSecondSession(false, true);
     }
     await checkWindow();
     if (failures.length) throw new Error(failures.length + " check(s) failed:\n" + failures.join("\n"));
