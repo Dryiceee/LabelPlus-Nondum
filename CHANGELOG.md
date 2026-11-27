@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3
+
+- Ruby notes (行间注), from the new button next to SFX: select a point text layer, drag over characters in the window and type a note for them. Vertical text gets its notes on the right, horizontal text above. Notes take the base's font, colour and layer style. Each note has an alignment (spread by default, centre, start), an overflow mode for notes longer than their characters (shrink by default, squeeze, overhang, or spread the base), a size, a ratio and a gap. Where a note needs room, the base's line spacing grows so it does not run into the next column. The preview shows the base moved where Apply will put it, with its colour and stroke, and undoes with Ctrl+Z (redo: Ctrl+Shift+Z or Ctrl+Y). Apply puts the base and the notes in a group, in one history step. The notes are saved with the PSD: open the group again after editing or moving the base, and the notes re-align to it. Paragraph, warped and rotated text are not supported.
+- LabelPlus import window: the style list under each group tab picks and shows that group's own style. Clicking the highlighted style keeps it, opening the window no longer gives the group the panel's current style, and 「默认样式」 clears the group's style instead of setting the library's first one.
+- The bundled hyphen library is gone (only hidden TypeR features used it).
+
 ## 1.2.2
 
 - SFX editor: several layers at once. Select text layers (or SFX layers made earlier) and click the lightning button: all of them open together. Each is drawn on the page; click one, or pick it from the layer list (PageUp / PageDown), to edit it. Each keeps its own settings and undo. Apply writes every layer in one history step, so one undo reverts them all; Cancel leaves them all as they were. Layers in the selection that are not text or SFX layers are left out, with a note in the editor.
