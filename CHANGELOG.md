@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.5
+
+- Style editor: a "Standard Vertical Roman Alignment" checkbox (Photoshop's 标准垂直罗马对齐方式), so Latin letters, digits and ?! stand upright in vertical text. New styles start with it on, whether made from scratch, from a layer, by FontScanR or from a tool preset. Existing styles keep what they had: open one and tick the box to change it.
+- A style added from a layer is named after the font's Chinese name in a Chinese interface (微软雅黑 40, not Microsoft YaHei 40), as FontScanR names its styles.
+- Settings > General > Centering: "Center after classic paste" (off, in the bubble, multi bubble). Until now only an unbound shortcut could change it, so once off it could not be turned back on from the panel.
+- SFX editor, free transform for one character: select a single character to get a frame like Photoshop's, with a handle on each corner and side. Drag a corner or side to stretch it, Shift+corner to scale it from the middle, Ctrl+corner to distort it, Ctrl+side to skew it, and drag just outside a corner to turn it. The transform is saved with the layer and goes into the shape on Apply. With several characters selected, the knob and corner work as before.
+- SFX editor, page view: the wheel scrolls up and down, Ctrl+wheel left and right, Alt+wheel zooms around the pointer.
+- SFX editor: dragging the dashed line moves the whole SFX even where it crosses a character. Before, the character took the click. A click on the line without dragging still selects the character under it, and a selected character keeps its own drag.
+- SFX editor: the layer shortcut hints are gone. PageUp / PageDown still switch layers.
+
 ## 1.2.4
 
 - Ruby notes on a text layer scaled with free transform: Apply no longer shrinks the base by the layer's scale (17.6 pt became 4 pt at 436 %), and the notes get the size the editor showed instead of a fraction of it, so the result matches the preview. A base already shrunk by 1.2.3 comes back with History (undo the 行间注 step).
