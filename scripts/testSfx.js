@@ -398,4 +398,81 @@ const ring = (x, y, outer, inner) => {
   assert.strictEqual(group.firstEmpty([null]), 0);
 }
 
+// Free transform of one character: the corners of its em square, stored in
+// its own units, before its size, turn and place
+{
+  const em = 100;
+  const square = layout.emSquare(em);
+  const quad = [[-40, -60], [70, -45], [55, 50], [-50, 40]];
+  const toPlace = layout.glyphMapper({ x: 0, y: 0, angle: 0, size: em }, em, quad);
+  square.forEach((p, i) => {
+    const at = toPlace(p[0], p[1]);
+    near(at[0], quad[i][0], 1e-9, "corner " + i + " x");
+    near(at[1], quad[i][1], 1e-9, "corner " + i + " y");
+  });
+  // Size, turn and place come after the free transform
+  const placedMapper = layout.glyphMapper({ x: 10, y: 20, angle: Math.PI / 2, size: 200 }, em, [[-60, -50], [60, -50], [60, 50], [-60, 50]]);
+  const corner = placedMapper(50, 50);
+  near(corner[0], 10 - 100, 1e-9, "turned x");
+  near(corner[1], 20 + 120, 1e-9, "turned y");
+
+  // Checked on the way in: broken, folded or do-nothing transforms are dropped
+  assert.strictEqual(layout.normalizeWarp(square, em), null, "the em square itself is no transform");
+  assert.strictEqual(layout.normalizeWarp([[0, 0], [10, 10], [0, 10], [10, 0]], em), null, "crossed sides");
+  assert.strictEqual(layout.normalizeWarp([[0, 0], [1, 1]], em), null);
+  assert.strictEqual(layout.normalizeWarp([[0, 0], [10, 0], ["x", 10], [0, 10]], em), null);
+  assert.deepStrictEqual(layout.normalizeWarp(quad, em), quad);
+  assert.strictEqual(layout.defaultGlyph().warp, null);
+
+  const model = layout.normalizeModel({ text: "咚", em, path: { type: "line", p0: [0, 0], p1: [100, 0] } });
+  const at = layout.layoutGlyphs(model)[0];
+  const box = { left: -50, top: -50, right: 50, bottom: 50 };
+  // A corner stretches the character, the opposite corner staying
+  const stretched = layout.freeTransformGlyph(model, 0, 2, [at.x + 100, at.y + 50], { box });
+  assert.deepStrictEqual(stretched.glyphs[0].warp, [[-50, -50], [100, -50], [100, 50], [-50, 50]]);
+  assert.strictEqual(model.glyphs[0].warp, null, "the model given is untouched");
+  // Shift: in proportion, around the middle (the corner at +50,+50 to
+  // +100,+80: twice as far on x, 1.6 on y, so 1.8 both ways)
+  const both = layout.freeTransformGlyph(model, 0, 2, [at.x + 100, at.y + 80], { box, fromCenter: true });
+  assert.deepStrictEqual(both.glyphs[0].warp, [[-90, -90], [90, -90], [90, 90], [-90, 90]]);
+  // Sides: the top stretches the height, the bottom side staying
+  const taller = layout.freeTransformGlyph(model, 0, 4, [at.x + 30, at.y - 100], { box });
+  assert.deepStrictEqual(taller.glyphs[0].warp, [[-50, -100], [50, -100], [50, 50], [-50, 50]]);
+  // Shift+side: around the middle, both sides move
+  const wider = layout.freeTransformGlyph(model, 0, 5, [at.x + 75, at.y], { box, fromCenter: true });
+  assert.deepStrictEqual(wider.glyphs[0].warp, [[-75, -50], [75, -50], [75, 50], [-75, 50]]);
+  // Ctrl+side: skew, the side moving as it is
+  const skewed = layout.freeTransformGlyph(model, 0, 4, [at.x + 30, at.y - 50], { box, distort: true });
+  assert.deepStrictEqual(skewed.glyphs[0].warp, [[-20, -50], [80, -50], [50, 50], [-50, 50]]);
+  assert.strictEqual(layout.frameHandles(square).length, 8);
+  assert.deepStrictEqual(layout.frameHandles(square)[5], [50, 0], "the middle of the right side");
+  // Ctrl: only that corner moves
+  const distorted = layout.freeTransformGlyph(model, 0, 1, [at.x + 80, at.y - 90], { box, distort: true });
+  assert.deepStrictEqual(distorted.glyphs[0].warp, [[-50, -50], [80, -90], [50, 50], [-50, 50]]);
+  // Stretching a distorted character keeps its shape and moves its sides
+  const again = layout.freeTransformGlyph(distorted, 0, 3, [at.x - 100, at.y + 50], { box });
+  assert.deepStrictEqual(again.glyphs[0].warp[1], [80, -90], "the opposite corner stays");
+  assert.deepStrictEqual(again.glyphs[0].warp[3], [-100, 50], "the dragged corner follows the pointer");
+  assert.ok(layout.isConvexQuad(again.glyphs[0].warp), "still a usable quad");
+  // A drag past the opposite corner or one that folds the character is refused
+  assert.strictEqual(layout.freeTransformGlyph(model, 0, 1, [at.x - 90, at.y + 90], { box, distort: true }), model);
+  // A box other than the em square (a narrow character): its own corners follow the pointer
+  const narrow = { left: -20, top: -50, right: 20, bottom: 50 };
+  const thin = layout.freeTransformGlyph(model, 0, 2, [at.x + 60, at.y + 50], { box: narrow });
+  const thinMap = layout.glyphMapper(at, em, thin.glyphs[0].warp);
+  const movedCorner = thinMap(20, 50);
+  near(movedCorner[0], at.x + 60, 1e-6, "the dragged corner lands on the pointer");
+  near(thinMap(-20, -50)[0], at.x - 20, 1e-6, "the opposite corner stays");
+
+  // The shape written to Photoshop follows the transform
+  const square2 = [{ op: "add", paths: [{ closed: true, pts: square.map((p) => [p[0], p[1], p[0], p[1], p[0], p[1], false]) }] }];
+  const written = layout.composeShape(distorted, { "咚": square2 })[0].paths[0].pts.map((p) => [Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000]);
+  assert.deepStrictEqual(written, [[at.x - 50, at.y - 50], [at.x + 80, at.y - 90], [at.x + 50, at.y + 50], [at.x - 50, at.y + 50]]);
+  // and survives the round trip through the layer payload
+  const saved = payload.parsePayload(JSON.stringify(payload.buildPayload({ model: distorted, outlines: { "咚": square2 } })));
+  assert.deepStrictEqual(saved.model.glyphs[0].warp, distorted.glyphs[0].warp);
+  // Resetting the character clears it
+  assert.strictEqual(layout.updateGlyphs(distorted, [0], () => layout.defaultGlyph()).glyphs[0].warp, null);
+}
+
 console.log("SFX tests passed");

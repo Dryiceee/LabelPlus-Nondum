@@ -358,7 +358,7 @@ const shortcutCommands = [
     label: "shortcut_cycleAutoCenter",
     defaultKeys: [],
     repeatDelay: 300,
-    // Only Settings shows the mode: the notice tells what the key changed
+    // Settings > General shows the mode: the notice tells what the key changed
     handler: (ctx) => {
       const value = nextAutoCenterMode(ctx.state.autoCenterMode);
       ctx.dispatch({ type: "setAutoCenterMode", value });

@@ -35,6 +35,7 @@ import UnsavedChangesDialog from "./unsavedChangesDialog";
 import LayerEffectsField from "./layerEffectsField";
 import { effectsFromLayer } from "../../labelplus/layerEffects";
 import { bakeLayerTransform } from "../../labelplus/layerStyle";
+import { isStandardVerticalRoman, setStandardVerticalRoman } from "../../verticalRoman";
 
 const BUBBLE_TYPES = ["shout", "narration"];
 const PUNCTUATION_ONLY_SCALES = [2, 3];
@@ -55,7 +56,11 @@ const EditStyleModal = React.memo(function EditStyleModal() {
     // This edition only makes point text
     "point"
   );
-  const [textProps, setTextProps] = React.useState(currentData.textProps || getDefaultStyle());
+  // A new style starts with Standard Vertical Roman Alignment on, whatever it came from
+  const [textProps, setTextProps] = React.useState(() => {
+    const initial = currentData.textProps ? deepClone(currentData.textProps) : getDefaultStyle();
+    return currentData.create ? setStandardVerticalRoman(initial, true) : initial;
+  });
   // Smart paste switches to this style for shout or narration bubbles
   const [bubbleType, setBubbleType] = React.useState(
     BUBBLE_TYPES.includes(currentData.bubbleType) ? currentData.bubbleType : ""
@@ -140,6 +145,8 @@ const EditStyleModal = React.memo(function EditStyleModal() {
       delete data.textProps.layerText.boundingBox;
       delete data.textProps.layerText.bounds;
       delete data.textProps.layerText.warp;
+      // A new style keeps the alignment its checkbox shows
+      if (currentData.create) setStandardVerticalRoman(data.textProps, isStandardVerticalRoman(textProps));
       setTextProps(data.textProps);
       const copiedSize = getStyleTextSize(data);
       if (copiedSize !== null) {
@@ -608,6 +615,10 @@ const StyleDetails = React.memo(function StyleDetails(props) {
     props.setTextProps(newProps);
   };
 
+  const changeVerticalRoman = (on) => {
+    props.setTextProps(setStandardVerticalRoman(deepClone(props.textProps), on));
+  };
+
   const changeAntiAlias = (antiAlias) => {
     const newProps = deepClone(props.textProps);
     newProps.layerText.antiAlias = antiAlias;
@@ -1027,6 +1038,20 @@ const StyleDetails = React.memo(function StyleDetails(props) {
               <BsTypeStrikethrough size={18} />
             </button>
           )}
+        </div>
+      </div>
+      <div className="style-edit-auto-size style-edit-vertical-roman hostBrdTopContrast">
+        <label className="topcoat-checkbox style-edit-auto-size-toggle">
+          <input
+            type="checkbox"
+            checked={isStandardVerticalRoman(props.textProps)}
+            onChange={(e) => changeVerticalRoman(e.target.checked)}
+          />
+          <div className="topcoat-checkbox__checkmark"></div>
+          <span>{locale.editStyleVerticalRoman || "Standard Vertical Roman Alignment"}</span>
+        </label>
+        <div className="style-edit-auto-size-descr">
+          {locale.editStyleVerticalRomanDescr || "Half-width characters such as Latin letters, digits and ?! stand upright in vertical text."}
         </div>
       </div>
     </div>

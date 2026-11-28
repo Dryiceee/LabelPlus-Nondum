@@ -25,6 +25,13 @@ const SECTIONS = [
   },
   {
     tab: "general",
+    group: "settingsGroupCentering",
+    entries: [
+      { title: "settingsAutoCenterLabel", hint: "settingsAutoCenterHint", also: ["settingsAutoCenterOff", "settingsAutoCenterSingle", "settingsAutoCenterMulti"], keywords: "center centre auto bubble paste centrer bulle coller 居中 气泡 自动 粘贴" },
+    ],
+  },
+  {
+    tab: "general",
     group: "settingsGroupAppUpdates",
     entries: [
       { title: "settingsCheckUpdatesLabel", requires: "updates", keywords: "update version mise jour maj" },

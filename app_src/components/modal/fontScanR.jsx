@@ -10,6 +10,8 @@ import {locale, nativeAlert, getStyleObject, rgbToHex, getUserFonts, scanPsdFont
 import {useContext} from '../../context';
 import {buildFontGroups, getGroupDisplayName} from '../../fontScan';
 import {getChineseFontNames} from '../../fontLocalNames';
+import {setStandardVerticalRoman} from '../../verticalRoman';
+import deepClone from '../../deepClone';
 import {getInterfaceLanguage} from '../../interfaceLanguage';
 import {buildFolderTree, flattenFolderTree} from '../../folderUtils';
 import useFontFinderMatches from '../../useFontFinderMatches';
@@ -181,7 +183,8 @@ const FontScanRModal = React.memo(function FontScanRModal() {
         }
         const styles = selectedGroups.map(group => ({
             name: (names[group.key] || group.defaultName).trim() || group.defaultName,
-            textProps: group.textProps,
+            // New styles have Standard Vertical Roman Alignment on
+            textProps: setStandardVerticalRoman(deepClone(group.textProps), true),
             stroke: group.stroke,
             effects: group.effects || [],
             prefixes: [],

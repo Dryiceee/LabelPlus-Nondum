@@ -61,6 +61,7 @@ const SettingsModal = React.memo(function SettingsModal() {
     modalData: state.modalData,
     pageNavOpenAfterImport: state.pageNavOpenAfterImport,
     pageNavMaxOpen: state.pageNavMaxOpen,
+    autoCenterMode: state.autoCenterMode,
   }));
   // Another window can open a given tab; otherwise the settings reopen on the
   // last tab the user looked at
@@ -70,6 +71,7 @@ const SettingsModal = React.memo(function SettingsModal() {
   const [autoUpdate, setAutoUpdate] = React.useState(context.state.autoUpdate === true);
   const [pageOpenAfterImport, setPageOpenAfterImport] = React.useState(context.state.pageNavOpenAfterImport !== false);
   const [pageMaxOpen, setPageMaxOpen] = React.useState(String(normalizeMaxOpen(context.state.pageNavMaxOpen)));
+  const [autoCenterMode, setAutoCenterMode] = React.useState(context.state.autoCenterMode || "off");
   const [editorTheme, setEditorTheme] = React.useState(context.state.editorTheme || "system");
   const [uiScale, setUiScale] = React.useState(String(normalizeUiLayout(context.state.uiLayout).sizes.uiScale));
   const [shortcutDraft, setShortcutDraft] = React.useState(() => ({ ...context.state.shortcut }));
@@ -246,6 +248,9 @@ const SettingsModal = React.memo(function SettingsModal() {
     }
     if (normalizeMaxOpen(pageMaxOpen) !== context.state.pageNavMaxOpen) {
       context.dispatch({ type: "setPageNavMaxOpen", value: pageMaxOpen });
+    }
+    if (autoCenterMode !== (context.state.autoCenterMode || "off")) {
+      context.dispatch({ type: "setAutoCenterMode", value: autoCenterMode });
     }
     context.dispatch({ type: "updateShortcut", shortcut: shortcutDraft });
     closeModal();
@@ -559,6 +564,27 @@ const SettingsModal = React.memo(function SettingsModal() {
                     .replace("{remind}", remindAt(pageMaxOpen))
                     .replace("{max}", normalizeMaxOpen(pageMaxOpen))}
                 </div>
+              </div>
+            </div>
+            <div className="settings-group">
+              <div className="settings-group-title">{locale.settingsGroupCentering}</div>
+              <div className="field">
+                <div className="field-label">{locale.settingsAutoCenterLabel}</div>
+                <div className="field-input">
+                  <select
+                    value={autoCenterMode}
+                    onChange={(e) => {
+                      setAutoCenterMode(e.target.value);
+                      setEdited(true);
+                    }}
+                    className="topcoat-textarea"
+                  >
+                    <option value="off">{locale.settingsAutoCenterOff}</option>
+                    <option value="single">{locale.settingsAutoCenterSingle}</option>
+                    <option value="multi">{locale.settingsAutoCenterMulti}</option>
+                  </select>
+                </div>
+                <div className="field-descr">{locale.settingsAutoCenterHint}</div>
               </div>
             </div>
             {config.updatesEnabled && (

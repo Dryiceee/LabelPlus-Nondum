@@ -404,3 +404,15 @@ input[type="color"] {
 
 .sfx-layer-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sfx-layer-name { color: var(--sfx-muted); max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+// One character's free transform, as Photoshop's: the frame right on its
+// box, 8 handles, its outline over it; turning
+// just outside a corner
+.sfx-overlay .sfx-transform-frame { fill: transparent; stroke: var(--sfx-accent); stroke-width: 1; pointer-events: all; cursor: move; }
+.sfx-overlay .sfx-rotate-zone { fill: transparent; stroke: none; pointer-events: all; cursor: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M5%2015a8%208%200%200%201%2010-10%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%224%22%2F%3E%3Cpath%20d%3D%22M5%2015a8%208%200%200%201%2010-10%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.6%22%2F%3E%3Cpath%20d%3D%22M13%202l4%203-4%203z%20M2%2013l3%204%203-4z%22%20fill%3D%22%23000%22%20stroke%3D%22%23fff%22%20stroke-width%3D%220.8%22%2F%3E%3C%2Fsvg%3E") 10 10, crosshair; }
+.sfx-overlay .sfx-corner.is-handle-0, .sfx-overlay .sfx-corner.is-handle-2 { cursor: nwse-resize; }
+.sfx-overlay .sfx-corner.is-handle-1, .sfx-overlay .sfx-corner.is-handle-3 { cursor: nesw-resize; }
+.sfx-overlay .sfx-corner.is-handle-4, .sfx-overlay .sfx-corner.is-handle-6 { cursor: ns-resize; }
+.sfx-overlay .sfx-corner.is-handle-5, .sfx-overlay .sfx-corner.is-handle-7 { cursor: ew-resize; }
+.sfx-glyph-outline { pointer-events: none; }
+.sfx-glyph-outline path { fill: none; stroke: var(--sfx-accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }

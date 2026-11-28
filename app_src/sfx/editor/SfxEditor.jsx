@@ -12,6 +12,7 @@ import {
   translatePath, scalePath, pathMidpoint, smoothStroke, trackingOf, withTracking, withText, normalizeModel,
   defaultGlyph, LIMITS, transformSelection, updateGlyphs, removeGlyphs, resetLayout, selectionCenter, turnEach, rampSize, bendAtSelection,
   bendWhole, bendStretch, stretchHandle, pathAnchors, moveHandle, moveAnchor, handleSegments, handlePoint,
+  glyphMapper, placedOutline, freeTransformGlyph, emSquare, frameHandles,
 } from "../layout";
 import { toSvgPath, bounds as outlineBounds } from "../outline";
 import { clampIndex, firstEmpty } from "../group";
@@ -65,13 +66,13 @@ const FALLBACK = {
   sfxFont: "Font",
   sfxLoadingGlyphs: "Reading characters…",
   sfxHelpCanvasTitle: "Page",
-  sfxHelpCanvas: "Drag on empty=Select characters|Shift+Drag=Add to selection|Click a character=Select it|Alt+Drag on empty=Draw a new path|Space+Drag=Pan|Wheel=Zoom|Drag the dashed line=Move the whole SFX",
+  sfxHelpCanvas: "Drag on empty=Select characters|Shift+Drag=Add to selection|Click a character=Select it|Alt+Drag on empty=Draw a new path|Space+Drag=Pan|Wheel=Scroll up/down|Ctrl+Wheel=Scroll left/right|Alt+Wheel=Zoom|Drag the dashed line=Move the whole SFX",
   sfxHelpPathTitle: "Path",
   sfxHelpPath: "Drag an end=Turn and stretch|Drag ●=Bend|Shift+End=Grow/shrink that end|Ctrl+End=Spacing|Ctrl+Shift+End=All sizes|Alt+End=Turn each character",
   sfxHelpCurveTitle: "Curve",
   sfxHelpCurve: "Click a small square=Show its handles|Drag a small square=Move the anchor|Drag a handle=Shape the curve|Alt+Handle=One side only",
   sfxHelpSelectionTitle: "Selected",
-  sfxHelpSelection: "Drag=Move|Drag ●=Rotate|Drag the corner=Resize|Shift+Click=Add/remove|Drag ◆=Bend just this stretch|Drag an end=Bend the path at the selection|Ctrl / Alt / Shift+End=Only the selected characters",
+  sfxHelpSelection: "Drag=Move|Drag a corner or side=Stretch|Shift+Corner=Scale from the middle|Ctrl+Corner=Distort|Ctrl+Side=Skew|Outside a corner / ●=Rotate|Shift+Click=Add/remove|Drag ◆=Bend just this stretch|Drag an end=Bend the path at the selection|Ctrl / Alt / Shift+End=Only the selected characters",
   sfxHelpKeysTitle: "Keys",
   sfxHelpKeys: "Arrows=Move (Shift: 10 px)|[ ]=Rotate (Shift: 15°)|+ −=Size|Tab=Next character|Ctrl+A=All|Delete=Remove|Esc=Deselect",
   sfxHelpDrawTitle: "Freehand",
@@ -92,8 +93,6 @@ const FALLBACK = {
   sfxSkipEmptyText: "the text layer is empty",
   sfxSkipNoOutlines: "Photoshop cannot turn its text into paths",
   sfxSkipBadPayload: "its SFX settings are damaged or from a newer version",
-  sfxHelpLayersTitle: "Layers",
-  sfxHelpLayers: "Click another SFX=Edit it|PageUp / PageDown=Previous / next layer",
 };
 
 // init.items, or the single layer of an older init
@@ -411,15 +410,31 @@ export default function SfxEditor({ init, bridge }) {
     return [(event.clientX - rect.left - v.x) / v.zoom, (event.clientY - rect.top - v.y) / v.zoom];
   };
 
+  // Wheel: the page scrolls up and down; Ctrl+wheel: left and right;
+  // Alt+wheel: zoom around the pointer. A sideways wheel or a touchpad's
+  // sideways swipe (deltaX) scrolls sideways too.
   const onWheel = (event) => {
     event.preventDefault();
-    const rect = svgRef.current.getBoundingClientRect();
-    const sx = event.clientX - rect.left;
-    const sy = event.clientY - rect.top;
-    const factor = Math.exp(-clamp(event.deltaY, -300, 300) / 400);
-    const zoom = clamp(v.zoom * factor, 0.02, 32);
-    const k = zoom / v.zoom;
-    setView({ zoom, x: sx - (sx - v.x) * k, y: sy - (sy - v.y) * k });
+    // Line and page deltas (deltaMode 1 and 2) in px
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? (svgRef.current.clientHeight || 600) : 1;
+    const deltaX = event.deltaX * unit;
+    const deltaY = event.deltaY * unit;
+    if (event.altKey) {
+      const rect = svgRef.current.getBoundingClientRect();
+      const sx = event.clientX - rect.left;
+      const sy = event.clientY - rect.top;
+      // Some systems send Alt+wheel sideways
+      const delta = deltaY || deltaX;
+      const factor = Math.exp(-clamp(delta, -300, 300) / 400);
+      const zoom = clamp(v.zoom * factor, 0.02, 32);
+      const k = zoom / v.zoom;
+      setView({ zoom, x: sx - (sx - v.x) * k, y: sy - (sy - v.y) * k });
+      return;
+    }
+    const sideways = event.ctrlKey || event.metaKey;
+    const dx = sideways ? deltaY || deltaX : deltaX;
+    const dy = sideways ? 0 : deltaY;
+    setView({ zoom: v.zoom, x: v.x - dx, y: v.y - dy });
   };
 
   // React's wheel listener is passive: preventDefault needs a native one
@@ -437,11 +452,12 @@ export default function SfxEditor({ init, bridge }) {
   const isBlank = (ch) => !String(ch || "").trim();
   const boxOf = (ch) => glyphBoxes[ch] || { left: -model.em / 2, top: -model.em / 2, right: model.em / 2, bottom: model.em / 2 };
 
-  // The four corners of a placed character's box, in document px
+  // The four corners of a placed character's box, in document px, its free
+  // transform included: top left, top right, bottom right, bottom left
+  const warpOf = (m, index) => (m.glyphs[index] && m.glyphs[index].warp) || null;
   const glyphQuad = (placement, pad = 0) => {
     const box = boxOf(placement.ch);
-    const m = glyphMatrix(placement, model.em);
-    const at = (x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+    const at = glyphMapper(placement, model.em, warpOf(model, placement.index));
     const p = pad / Math.max(1e-6, placement.size / model.em);
     return [at(box.left - p, box.top - p), at(box.right + p, box.top - p), at(box.right + p, box.bottom + p), at(box.left - p, box.bottom + p)];
   };
@@ -456,6 +472,27 @@ export default function SfxEditor({ init, bridge }) {
       Math.max.apply(null, ys) >= rect.top && Math.min.apply(null, ys) <= rect.bottom;
   }).map((placement) => placement.index);
 
+  // The character under a document point (the last drawn wins), or null
+  const glyphAt = (point) => {
+    for (let i = placements.length - 1; i >= 0; i--) {
+      const placement = placements[i];
+      if (isBlank(placement.ch)) continue;
+      const quad = glyphQuad(placement);
+      let sign = 0;
+      let inside = true;
+      for (let k = 0; k < 4 && inside; k++) {
+        const a = quad[k];
+        const b = quad[(k + 1) % 4];
+        const cross = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (point[0] - a[0]);
+        if (cross === 0) continue;
+        if (!sign) sign = Math.sign(cross);
+        else if (Math.sign(cross) !== sign) inside = false;
+      }
+      if (inside) return placement.index;
+    }
+    return null;
+  };
+
   const startDrag = (event, kind, index) => {
     if (event.button !== 0 && event.button !== 1) return;
     event.preventDefault();
@@ -463,12 +500,26 @@ export default function SfxEditor({ init, bridge }) {
     const point = toDoc(event);
     let mode = kind;
     let selection = selectedRef.current;
+    // A click on the dashed line that does not drag picks the character under it
+    let lineGlyph = null;
     // Space + drag, or the middle button: the view moves, whatever is under the pointer
     if (event.button === 1 || spaceRef.current) mode = "pan";
     else if (kind === "empty") mode = tool === "draw" || event.altKey ? "draw" : "marquee";
     // Alt+drag on a character: the whole SFX, unless it is one of the selected
     else if (kind === "glyph" && event.altKey) mode = selection.indexOf(index) >= 0 ? "glyph" : "move";
-    else if (kind === "guide") mode = "move";
+    // The dashed line lies on top of the characters, so a drag on it moves
+    // the whole SFX. A selected character under it keeps its own drag, and
+    // Shift/Ctrl+click still adds or removes the character under it.
+    else if (kind === "guide") {
+      const under = glyphAt(point);
+      if (under !== null && !event.altKey && (selection.indexOf(under) >= 0 || event.shiftKey || event.ctrlKey || event.metaKey)) {
+        mode = "glyph";
+        index = under;
+      } else {
+        mode = "move";
+        lineGlyph = under;
+      }
+    }
     else if (kind === "end") {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey) mode = "scaleAll";
       else if (event.ctrlKey || event.metaKey) mode = "spacing";
@@ -496,8 +547,19 @@ export default function SfxEditor({ init, bridge }) {
       mode, index, start: point, last: point, base: modelRef.current, changed: false,
       screen: [event.clientX, event.clientY], view: v, selection, additive: event.shiftKey,
       center: selection.length ? selectionCenter(modelRef.current, selection) : null,
-      mid: pathMidpoint(modelRef.current.path),
+      mid: pathMidpoint(modelRef.current.path), lineGlyph,
     };
+    // A corner of one character's frame: the pointer holds the corner where
+    // it took it (the handle sits a few px outside the character's box)
+    if (mode === "corner") {
+      const placed = placements[selection[0]];
+      if (!placed) {
+        dragRef.current = null;
+        return;
+      }
+      const handlePoint = frameHandles(glyphQuad(placed))[index];
+      dragRef.current.offset = [handlePoint[0] - point[0], handlePoint[1] - point[1]];
+    }
     if (mode === "draw") setStroke([point]);
     if (mode === "marquee") setMarquee({ from: point, to: point });
     try { svgRef.current.setPointerCapture(event.pointerId); } catch (error) {}
@@ -549,6 +611,19 @@ export default function SfxEditor({ init, bridge }) {
       }
       case "glyph":
         return transformSelection(base, drag.selection, { dx, dy });
+      // Free transform of one character by a handle of its frame: a corner
+      // or side stretches it (Shift: in proportion around its middle; a side
+      // around its middle too), Ctrl distorts (a side skews). The modifiers
+      // are read live, so they can change during the drag.
+      case "corner": {
+        const i = drag.selection[0];
+        const target = [point[0] + drag.offset[0], point[1] + drag.offset[1]];
+        return freeTransformGlyph(base, i, drag.index, target, {
+          box: boxOf(chars(base.text)[i]),
+          distort: event.ctrlKey || event.metaKey,
+          fromCenter: event.shiftKey,
+        });
+      }
       // End squares with a modifier while characters are selected
       case "selSpacing":
       case "selScaleAll": {
@@ -641,6 +716,7 @@ export default function SfxEditor({ init, bridge }) {
       return;
     }
     if (drag.changed) remember(drag.base);
+    else if (drag.mode === "move" && !drag.moved && drag.lineGlyph !== null) setSelected([drag.lineGlyph]);
   };
 
   /* ----------------------------- keyboard ---------------------------- */
@@ -842,11 +918,18 @@ export default function SfxEditor({ init, bridge }) {
   const selectedPlacements = selected.map((i) => placements[i]).filter(Boolean);
   const quads = selectedPlacements.map((placement) => glyphQuad(placement, 4 / v.zoom).map(toScreen));
   let handles = null;
+  // One character: Photoshop's Free Transform frame, right on its box, with
+  // a handle on each corner and side and its outline drawn over it.
+  // Turning: drag just outside a corner.
+  let transformFrame = null;
   if (single) {
-    const quad = quads[0];
-    const topMid = [(quad[0][0] + quad[1][0]) / 2, (quad[0][1] + quad[1][1]) / 2];
-    const up = [Math.sin(single.angle), -Math.cos(single.angle)];
-    handles = { topMid, knob: [topMid[0] + up[0] * 22, topMid[1] + up[1] * 22], corner: quad[2], frame: null };
+    const quad = glyphQuad(single).map(toScreen);
+    const singleWarp = warpOf(model, single.index);
+    transformFrame = {
+      quad,
+      handles: frameHandles(quad),
+      outline: outlines[single.ch] ? toSvgPath(placedOutline(outlines[single.ch], single, model.em, singleWarp)) : null,
+    };
   } else if (quads.length > 1) {
     const xs = [].concat(...quads.map((q) => q.map((p) => p[0])));
     const ys = [].concat(...quads.map((q) => q.map((p) => p[1])));
@@ -880,6 +963,11 @@ export default function SfxEditor({ init, bridge }) {
       rotate: (degrees) => { edit((m) => Object.assign({}, m, { rotation: degrees })); return true; },
       apply: () => { applyRef.current(); return true; },
       cancel: () => { bridge.cancel(); return true; },
+      view: () => viewRef.current,
+      selection: () => selectedRef.current.slice(),
+      model: () => modelRef.current,
+      // Code run in the window, for events the ops above do not cover
+      run: (code) => new Function("window", code)(window),
     };
   }
   const canUndo = historyOf().past.length > 0;
@@ -910,6 +998,8 @@ export default function SfxEditor({ init, bridge }) {
                 {layoutOf(m).map((placement) => {
                   const d = svgPathsOf(outlineSets[i])[placement.ch];
                   if (!d) return null;
+                  const warp = warpOf(m, placement.index);
+                  if (warp) return <path key={placement.index} d={toSvgPath(placedOutline(outlineSets[i][placement.ch], placement, m.em, warp))} fill={toHex(m.color)} fillRule="nonzero" />;
                   return <path key={placement.index} d={d} fill={toHex(m.color)} fillRule="nonzero" transform={"matrix(" + glyphMatrix(placement, m.em).join(" ") + ")"} />;
                 })}
               </g>
@@ -917,16 +1007,31 @@ export default function SfxEditor({ init, bridge }) {
             {placements.map((placement) => {
               const d = svgPaths[placement.ch];
               if (!d) return null;
+              // A freely transformed character is drawn from its placed outline
+              const warp = warpOf(model, placement.index);
+              if (warp) return <path key={placement.index} d={toSvgPath(placedOutline(outlines[placement.ch], placement, model.em, warp))} fill={color} fillRule="nonzero" />;
               const m = glyphMatrix(placement, model.em);
               return <path key={placement.index} d={d} fill={color} fillRule="nonzero" transform={"matrix(" + m.join(" ") + ")"} />;
             })}
           </g>
-          {/* The path line moves the SFX, but a character on it takes the click */}
-          <polyline points={guidePoints} className="sfx-guide-hit" onPointerDown={(event) => startDrag(event, "guide")} />
           <g transform={"translate(" + v.x + " " + v.y + ") scale(" + v.zoom + ")"}>
             {models.map((m, i) => (i === active ? null : layoutOf(m).map((placement) => {
               if (isBlank(placement.ch)) return null;
               const half = m.em / 2;
+              const warp = warpOf(m, placement.index);
+              if (warp) {
+                const at = glyphMapper(placement, m.em, warp);
+                return (
+                  <polygon
+                    key={"other" + i + "-" + placement.index}
+                    className="sfx-other-hit"
+                    points={emSquare(m.em).map((p) => at(p[0], p[1]).join(",")).join(" ")}
+                    onPointerDown={(event) => pickLayer(event, i)}
+                  >
+                    <title>{items[i].layerName || m.text}</title>
+                  </polygon>
+                );
+              }
               return (
                 <rect
                   key={"other" + i + "-" + placement.index}
@@ -942,6 +1047,17 @@ export default function SfxEditor({ init, bridge }) {
             {placements.map((placement) => {
               // A space keeps its room on the path, but has nothing to show or pick
               if (isBlank(placement.ch)) return null;
+              const hitClass = "sfx-glyph-hit" + (!svgPaths[placement.ch] ? " is-missing" : "");
+              if (warpOf(model, placement.index)) {
+                return (
+                  <polygon
+                    key={"hit" + placement.index}
+                    className={hitClass}
+                    points={glyphQuad(placement).map((p) => p.join(",")).join(" ")}
+                    onPointerDown={(event) => startDrag(event, "glyph", placement.index)}
+                  />
+                );
+              }
               const box = boxOf(placement.ch);
               const m = glyphMatrix(placement, model.em);
               return (
@@ -955,13 +1071,41 @@ export default function SfxEditor({ init, bridge }) {
               );
             })}
           </g>
+          {/* The dashed line moves the whole SFX: it is above the characters,
+              which take the clicks everywhere else */}
+          <polyline points={guidePoints} className="sfx-guide-hit" onPointerDown={(event) => startDrag(event, "guide")} />
+          {transformFrame && transformFrame.outline ? (
+            <g className="sfx-glyph-outline" transform={"translate(" + v.x + " " + v.y + ") scale(" + v.zoom + ")"}>
+              <path d={transformFrame.outline} />
+            </g>
+          ) : null}
           <g className="sfx-overlay">
             {models.map((m, i) => (i === active ? null : (
               <polyline key={"guide" + i} className="sfx-guide sfx-guide-other" points={guideOf(m).map((p) => toScreen(p).map((n) => round(n, 1)).join(",")).join(" ")} />
             )))}
             <polyline points={guidePoints} className="sfx-guide" />
             {stroke ? <polyline points={strokePoints} className="sfx-stroke" /> : null}
-            {quads.length ? (
+            {transformFrame ? (
+              <g className="sfx-selection sfx-transform">
+                {transformFrame.quad.map((p, k) => (
+                  <circle key={"turn" + k} cx={p[0]} cy={p[1]} r={18} className="sfx-rotate-zone" onPointerDown={(event) => startDrag(event, "rotate")} />
+                ))}
+                <polygon
+                  className="sfx-transform-frame"
+                  points={transformFrame.quad.map((p) => p.join(",")).join(" ")}
+                  onPointerDown={(event) => startDrag(event, "glyph", single.index)}
+                />
+                {transformFrame.handles.map((p, k) => (
+                  <rect
+                    key={"frame" + k}
+                    x={p[0] - 5} y={p[1] - 5} width={10} height={10}
+                    className={"sfx-handle sfx-corner is-handle-" + k}
+                    onPointerDown={(event) => startDrag(event, "corner", k)}
+                  />
+                ))}
+              </g>
+            ) : null}
+            {quads.length > 1 ? (
               <g className="sfx-selection">
                 {quads.map((quad, i) => <polygon key={i} points={quad.map((p) => p.join(",")).join(" ")} />)}
                 {handles && handles.frame ? (
@@ -1032,7 +1176,7 @@ export default function SfxEditor({ init, bridge }) {
           {loading ? <span className="sfx-loading">{t("sfxLoadingGlyphs")}</span> : null}
         </div>
         </div>
-        <ShortcutHelp t={t} groups={tool === "draw" ? ["Draw"] : (selected.length ? ["Selection", "Keys"] : ["Canvas", "Path"]).concat(anchors.length || handleList.length ? ["Curve"] : []).concat(count > 1 ? ["Layers"] : [])} />
+        <ShortcutHelp t={t} groups={tool === "draw" ? ["Draw"] : (selected.length ? ["Selection", "Keys"] : ["Canvas", "Path"]).concat(anchors.length || handleList.length ? ["Curve"] : [])} />
       </div>
 
       <aside className="sfx-side">

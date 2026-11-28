@@ -19,6 +19,8 @@ import { notePerfRender } from "../../perfDebug";
 import { getStyleTextSize, normalizeStyleSizePresets, parseStyleSize, sanitizeStyleSizeInput, stepStyleSize } from "../../styleSizePresets";
 import { isStyleStrokeOn } from "../../styleStroke";
 import { mixedLooks, styleFromLayer } from "../../labelplus/layerStyle";
+import { getChineseFontNames } from "../../fontLocalNames";
+import { getInterfaceLanguage } from "../../interfaceLanguage";
 
 const FontPreviewContext = React.createContext({ aliases: {}, css: "", revision: 0 });
 const emptyIdSet = new Set();
@@ -39,6 +41,7 @@ const StylesBlock = React.memo(function StylesBlock({ activeStyleId }) {
     showQuickStyleSize: state.showQuickStyleSize,
     styleSizeStep: state.styleSizeStep,
     styleSizeTipVisible: state.styleSizeTipVisible,
+    language: state.language,
   }));
   const fontTextStyles = React.useMemo(
     () => (context.state.styles || []).map((style) => style.textProps?.layerText?.textStyleRange?.[0]?.textStyle || {}),
@@ -94,7 +97,12 @@ const StylesBlock = React.memo(function StylesBlock({ activeStyleId }) {
     };
   }, [styleContextMenu, closeStyleContextMenu]);
 
-  // A new style from the selected text layer, refused when its text mixes looks
+  const languageRef = React.useRef(context.state.language);
+  languageRef.current = context.state.language;
+
+  // A new style from the selected text layer, refused when its text mixes looks.
+  // In a Chinese interface it is named after the font's Chinese name, as
+  // FontScanR names its styles.
   const addStyleFromLayer = React.useCallback(() => {
     getActiveLayerText((data) => {
       if (!data || !data.textProps || !data.textProps.layerText || !(data.textProps.layerText.textStyleRange || []).length) {
@@ -105,8 +113,16 @@ const StylesBlock = React.memo(function StylesBlock({ activeStyleId }) {
         nativeAlert(locale.lpStyleMixed || "This layer mixes several fonts or looks: one style cannot hold it.", locale.errorTitle, true);
         return;
       }
-      const style = styleFromLayer(data);
-      context.dispatch({ type: "setModal", modal: "editStyle", data: { create: true, name: style.name, textProps: style.textProps, stroke: style.stroke || undefined, effects: style.effects } });
+      const openEditor = (localName) => {
+        const style = styleFromLayer(data, localName);
+        context.dispatch({ type: "setModal", modal: "editStyle", data: { create: true, name: style.name, textProps: style.textProps, stroke: style.stroke || undefined, effects: style.effects } });
+      };
+      const postScriptName = data.textProps.layerText.textStyleRange[0].textStyle?.fontPostScriptName;
+      if (!postScriptName || !/^zh/i.test(getInterfaceLanguage({ language: languageRef.current }))) {
+        openEditor();
+        return;
+      }
+      getChineseFontNames([postScriptName]).then((names) => openEditor(names[postScriptName]), () => openEditor());
     });
   }, [context.dispatch]);
 

@@ -40,6 +40,7 @@ assert.strictEqual(mixedLooks({}), false);
   assert.strictEqual(style.name, "思源黑体 24");
   assert.deepStrictEqual(style.stroke, { enabled: true, size: 3 });
   assert.strictEqual(data.textProps.layerText.textKey, "你好！？", "the layer data is untouched");
+  assert.strictEqual(styleFromLayer(data, "思源黑体 Bold").name, "思源黑体 Bold 24", "the local font name replaces the English one");
 }
 
 // A layer scaled with free transform: the size Photoshop shows, not the stored one
@@ -64,6 +65,19 @@ assert.strictEqual(mixedLooks({}), false);
   };
   bakeLayerTransform(layerText);
   assert.deepStrictEqual(layerText.textStyleRange[0].textStyle, { size: 21, leading: 25 });
+}
+
+// Standard Vertical Roman Alignment: "withStream" on (upright), "rotated" off
+{
+  const { isStandardVerticalRoman, setStandardVerticalRoman } = load("app_src/verticalRoman.js");
+  const props = layer([run(0, 2, { ...look, baselineDirection: "rotated" }), run(2, 4, look)]).textProps;
+  assert.strictEqual(isStandardVerticalRoman(props), false);
+  assert.strictEqual(setStandardVerticalRoman(props, true), props);
+  assert.deepStrictEqual(props.layerText.textStyleRange.map((r) => r.textStyle.baselineDirection), ["withStream", "withStream"]);
+  assert.strictEqual(isStandardVerticalRoman(props), true);
+  setStandardVerticalRoman(props, false);
+  assert.strictEqual(props.layerText.textStyleRange[1].textStyle.baselineDirection, "rotated");
+  assert.strictEqual(isStandardVerticalRoman({}), false);
 }
 
 console.log("LabelPlus layer style tests passed");

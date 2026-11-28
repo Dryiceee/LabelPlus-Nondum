@@ -58,8 +58,10 @@ function bakeLayerTransform(layerText) {
 }
 
 // What the style editor gets: the first run and paragraph, nothing of the
-// layer's own text, shape or place
-function styleFromLayer(data) {
+// layer's own text, shape or place. localName: the font's name in the
+// interface language (fontLocalNames.js), which names the style in its place
+// of the English name.
+function styleFromLayer(data, localName) {
   const textProps = JSON.parse(JSON.stringify(data.textProps));
   const layerText = textProps.layerText;
   layerText.textStyleRange = layerText.textStyleRange.slice(0, 1);
@@ -68,7 +70,7 @@ function styleFromLayer(data) {
   ["textKey", "textShape", "textClickPoint", "transform", "boundingBox", "bounds", "warp", "orientation"].forEach((key) => delete layerText[key]);
   const textStyle = layerText.textStyleRange[0].textStyle || {};
   const size = typeof textStyle.size === "number" ? Math.round(textStyle.size * 10) / 10 : null;
-  const name = [textStyle.fontName || textStyle.fontPostScriptName || "", size !== null ? String(size) : ""].filter(Boolean).join(" ");
+  const name = [localName || textStyle.fontName || textStyle.fontPostScriptName || "", size !== null ? String(size) : ""].filter(Boolean).join(" ");
   return { textProps, stroke: data.stroke || null, effects: effectsFromLayer(data.layerEffects), name };
 }
 

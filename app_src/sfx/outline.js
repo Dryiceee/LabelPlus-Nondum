@@ -134,19 +134,26 @@ export function applyToPoint(m, x, y) {
   return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 }
 
-export function transformComponents(components, m) {
+// Every anchor and handle through f(x, y) -> [x, y]. A projective f (a
+// distorted character) moves the handles as Photoshop's Distort does: the
+// curves stay close to the exact image, the straight edges stay exact.
+export function mapComponents(components, f) {
   return components.map((component) => ({
     op: component.op,
     paths: component.paths.map((path) => ({
       closed: path.closed,
       pts: path.pts.map((p) => {
-        const a = applyToPoint(m, p[0], p[1]);
-        const b = applyToPoint(m, p[2], p[3]);
-        const f = applyToPoint(m, p[4], p[5]);
-        return [a[0], a[1], b[0], b[1], f[0], f[1], p[6]];
+        const a = f(p[0], p[1]);
+        const b = f(p[2], p[3]);
+        const c = f(p[4], p[5]);
+        return [a[0], a[1], b[0], b[1], c[0], c[1], p[6]];
       }),
     })),
   }));
+}
+
+export function transformComponents(components, m) {
+  return mapComponents(components, (x, y) => applyToPoint(m, x, y));
 }
 
 // Box of the anchors and handles (handles bound a Bézier curve)

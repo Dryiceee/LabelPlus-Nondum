@@ -13,7 +13,7 @@
 // Characters fill the path from end to end; the spacing is the path length
 // against the characters' natural width (tracking, see trackingOf).
 
-import { transformComponents, multiply, bounds as outlineBounds } from "./outline";
+import { transformComponents, mapComponents, multiply, invert, applyToPoint, bounds as outlineBounds } from "./outline";
 
 export const PATH_TYPES = ["line", "arc", "free", "bezier"];
 const SAMPLES = 160;
@@ -428,9 +428,190 @@ export const LIMITS = {
 
 // dx, dy: offset from its spot on the path; rot, scale: its own turn and
 // size; space: how much room it takes on the path (bending the path at a
-// selection stretches the selected characters' room)
+// selection stretches the selected characters' room); warp: free transform
+// (see below), null when the character keeps its shape
 export function defaultGlyph() {
-  return { dx: 0, dy: 0, rot: 0, scale: 1, space: 1 };
+  return { dx: 0, dy: 0, rot: 0, scale: 1, space: 1, warp: null };
+}
+
+/* -------------------------- free transform ------------------------- */
+
+// A character's free transform is where the four corners of its em square
+// go: [top left, top right, bottom right, bottom left], in the character's
+// own units (an outline is em-sized and centred on 0,0), before its size,
+// turn and place. Stretching keeps a rectangle; distorting moves corners on
+// their own (a projective map, as Photoshop's Distort).
+
+export function emSquare(em) {
+  const h = em / 2;
+  return [[-h, -h], [h, -h], [h, h], [-h, h]];
+}
+
+// 3x3 projective maps [a, b, c, d, e, f, g, h, i]:
+// x' = (a x + b y + c) / (g x + h y + i), y' = (d x + e y + f) / (g x + h y + i)
+// The unit square (0,0) (1,0) (1,1) (0,1) onto quad q (Heckbert)
+function squareToQuad(q) {
+  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = q;
+  const sx = x0 - x1 + x2 - x3;
+  const sy = y0 - y1 + y2 - y3;
+  if (Math.abs(sx) < 1e-12 && Math.abs(sy) < 1e-12) {
+    return [x1 - x0, x3 - x0, x0, y1 - y0, y3 - y0, y0, 0, 0, 1];
+  }
+  const dx1 = x1 - x2, dx2 = x3 - x2, dy1 = y1 - y2, dy2 = y3 - y2;
+  const den = dx1 * dy2 - dx2 * dy1;
+  if (Math.abs(den) < 1e-12) return null;
+  const g = (sx * dy2 - dx2 * sy) / den;
+  const h = (dx1 * sy - sx * dy1) / den;
+  return [x1 - x0 + g * x1, x3 - x0 + h * x3, x0, y1 - y0 + g * y1, y3 - y0 + h * y3, y0, g, h, 1];
+}
+
+function invert3(m) {
+  const [a, b, c, d, e, f, g, h, i] = m;
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  if (!det || !isFinite(det)) return null;
+  return [A / det, -(b * i - c * h) / det, (b * f - c * e) / det, B / det, (a * i - c * g) / det, -(a * f - c * d) / det, C / det, -(a * h - b * g) / det, (a * e - b * d) / det];
+}
+
+function multiply3(m, n) {
+  const r = [];
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) r.push(m[row * 3] * n[col] + m[row * 3 + 1] * n[3 + col] + m[row * 3 + 2] * n[6 + col]);
+  }
+  return r;
+}
+
+function applyProjective(m, x, y) {
+  const w = m[6] * x + m[7] * y + m[8];
+  return [(m[0] * x + m[1] * y + m[2]) / w, (m[3] * x + m[4] * y + m[5]) / w];
+}
+
+// The projective map taking quad src onto quad dst, or null
+export function quadToQuad(src, dst) {
+  const a = squareToQuad(src);
+  const b = squareToQuad(dst);
+  const inv = a && invert3(a);
+  return inv && b ? multiply3(b, inv) : null;
+}
+
+// Corners in order, the turn always the same way: a quad a projective map can
+// take a square onto (no corner inside, no crossed sides)
+export function isConvexQuad(q) {
+  if (!Array.isArray(q) || q.length !== 4) return false;
+  let sign = 0;
+  for (let k = 0; k < 4; k++) {
+    const a = q[k], b = q[(k + 1) % 4], c = q[(k + 2) % 4];
+    const cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    if (Math.abs(cross) < 1e-9) return false;
+    if (!sign) sign = Math.sign(cross);
+    else if (Math.sign(cross) !== sign) return false;
+  }
+  return true;
+}
+
+// A stored free transform checked: four finite corners making a usable quad,
+// null when it is missing, broken or does nothing
+export function normalizeWarp(raw, em) {
+  if (!Array.isArray(raw) || raw.length !== 4) return null;
+  const q = raw.map((p) => pt(p, null));
+  if (q.some((p) => !p) || !isConvexQuad(q)) return null;
+  const square = emSquare(em);
+  const tolerance = Math.max(1e-6, em * 1e-5);
+  if (q.every((p, i) => Math.abs(p[0] - square[i][0]) <= tolerance && Math.abs(p[1] - square[i][1]) <= tolerance)) return null;
+  return q.map((p) => [Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000]);
+}
+
+// Character units -> document, free transform included
+export function glyphMapper(placement, em, warp) {
+  const m = glyphMatrix(placement, em);
+  const H = warp ? quadToQuad(emSquare(em), warp) : null;
+  return (x, y) => {
+    const p = H ? applyProjective(H, x, y) : [x, y];
+    return [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]];
+  };
+}
+
+// The outline of a placed character in document px, free transform included
+export function placedOutline(outline, placement, em, warp) {
+  return mapComponents(outline || [], glyphMapper(placement, em, warp));
+}
+
+const boxCorners = (box) => [[box.left, box.top], [box.right, box.top], [box.right, box.bottom], [box.left, box.bottom]];
+
+const midpoint = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+
+// The 8 handles of a character's free transform frame, in Photoshop's order
+// of use: 0-3 the corners (top left, top right, bottom right, bottom left),
+// 4-7 the middles of the sides (top, right, bottom, left)
+export function frameHandles(quad) {
+  return quad.concat(quad.map((p, k) => midpoint(p, quad[(k + 1) % 4])));
+}
+
+// Free transform of one character by a handle of its box frame (box: left,
+// top, right, bottom in character units; handle as in frameHandles) dragged
+// to a document point, as Photoshop's Free Transform:
+// - a corner stretches the character, the opposite corner staying, the sides
+//   keeping their directions. fromCenter (Shift): both ways alike, around
+//   the middle of the frame. Distort (Ctrl): only that corner moves.
+// - a side stretches it one way, the opposite side staying (fromCenter: the
+//   opposite side moves too, around the middle). Distort: that side moves as
+//   it is (skew).
+// A move that would fold the character over is refused.
+export function freeTransformGlyph(model, index, handle, target, { box, distort = false, fromCenter = false } = {}) {
+  const glyph = model.glyphs[index];
+  const placement = layoutGlyphs(model)[index];
+  if (!glyph || !placement || !box || !(handle >= 0 && handle <= 7)) return model;
+  const inv = invert(glyphMatrix(placement, model.em));
+  if (!inv) return model;
+  const local = applyToPoint(inv, target[0], target[1]);
+  const before = glyph.warp ? quadToQuad(emSquare(model.em), glyph.warp) : null;
+  const source = boxCorners(box);
+  const current = source.map((p) => (before ? applyProjective(before, p[0], p[1]) : p));
+  const ratio = (to, from, at) => (Math.abs(from - at) > 1e-6 ? (to - at) / (from - at) : 1);
+  const stretch = (o, sx, sy) => {
+    const kx = Math.max(0.02, sx);
+    const ky = Math.max(0.02, sy);
+    return current.map((p) => [o[0] + (p[0] - o[0]) * kx, o[1] + (p[1] - o[1]) * ky]);
+  };
+  const center = [current.reduce((sum, p) => sum + p[0], 0) / 4, current.reduce((sum, p) => sum + p[1], 0) / 4];
+  let next;
+  if (handle < 4) {
+    if (distort) {
+      next = current.slice();
+      next[handle] = local;
+    } else {
+      const o = fromCenter ? center : current[(handle + 2) % 4];
+      const c = current[handle];
+      let sx = ratio(local[0], c[0], o[0]);
+      let sy = ratio(local[1], c[1], o[1]);
+      if (fromCenter) sx = sy = (sx + sy) / 2;
+      next = stretch(o, sx, sy);
+    }
+  } else {
+    const side = handle - 4;
+    const a = side;
+    const b = (side + 1) % 4;
+    const c = midpoint(current[a], current[b]);
+    if (distort) {
+      const dx = local[0] - c[0];
+      const dy = local[1] - c[1];
+      next = current.slice();
+      next[a] = [current[a][0] + dx, current[a][1] + dy];
+      next[b] = [current[b][0] + dx, current[b][1] + dy];
+    } else {
+      const o = fromCenter ? center : midpoint(current[(side + 2) % 4], current[(side + 3) % 4]);
+      // Top and bottom stretch the height, left and right the width
+      const vertical = side % 2 === 0;
+      const k = vertical ? ratio(local[1], c[1], o[1]) : ratio(local[0], c[0], o[0]);
+      next = stretch(o, vertical ? 1 : k, vertical ? k : 1);
+    }
+  }
+  const minSide = Math.min(...next.map((p, k) => dist(p, next[(k + 1) % 4])));
+  if (!isConvexQuad(next) || minSide < model.em * 0.02) return model;
+  const H = quadToQuad(source, next);
+  if (!H) return model;
+  const warp = emSquare(model.em).map((p) => applyProjective(H, p[0], p[1]));
+  return updateGlyphs(model, [index], () => ({ warp: normalizeWarp(warp, model.em) }));
 }
 
 function normalizePath(raw, fallback) {
@@ -472,6 +653,7 @@ export function normalizeModel(raw, fallback = {}) {
       rot: clamp(finite(g.rot, 0), LIMITS.rotation[0], LIMITS.rotation[1]),
       scale: clamp(finite(g.scale, 1), LIMITS.glyphScale[0], LIMITS.glyphScale[1]),
       space: clamp(finite(g.space, 1), LIMITS.glyphSpace[0], LIMITS.glyphSpace[1]),
+      warp: normalizeWarp(g.warp, em),
     };
   });
   const fallbackPath = { type: "line", p0: [0, 0], p1: [em * Math.max(1, list.length), 0] };
@@ -587,9 +769,17 @@ export function composeShape(model, outlines, base = null) {
   layoutGlyphs(model).forEach((placement) => {
     const outline = outlines && outlines[placement.ch];
     if (!outline || !outline.length) return;
-    let m = glyphMatrix(placement, model.em);
-    if (base) m = multiply(base, m);
-    transformComponents(outline, m).forEach((component) => components.push(component));
+    const warp = model.glyphs[placement.index] && model.glyphs[placement.index].warp;
+    let placed;
+    if (warp) {
+      placed = placedOutline(outline, placement, model.em, warp);
+      if (base) placed = transformComponents(placed, base);
+    } else {
+      let m = glyphMatrix(placement, model.em);
+      if (base) m = multiply(base, m);
+      placed = transformComponents(outline, m);
+    }
+    placed.forEach((component) => components.push(component));
   });
   return components;
 }

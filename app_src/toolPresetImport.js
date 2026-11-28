@@ -1,4 +1,5 @@
 // Photoshop tool preset (.tpl) import. Pure functions, no CEP dependency, unit-testable.
+import { VERTICAL_ROMAN_ON } from "./verticalRoman";
 // File layout: "8BTP", version, block count, then "8BIM" blocks aligned on 4 bytes.
 // The "tptp" block holds a preset count, then for each preset its UTF-16 name, a
 // descriptor version and an action descriptor. Presets have no length of their
@@ -264,6 +265,8 @@ const toolPresetToStyle = (preset) => {
 
   const paragraphOptions = preset.descriptor.textToolParagraphOptions || {};
   const textStyle = pickKeys(source, TEXT_STYLE_KEYS);
+  // New styles have Standard Vertical Roman Alignment on
+  textStyle.baselineDirection = VERTICAL_ROMAN_ON;
   textStyle.impliedFontSize = textStyle.size;
   if (textStyle.baselineShift !== undefined) textStyle.impliedBaselineShift = textStyle.baselineShift;
   if (textStyle.autoLeading === false && textStyle.leading > 0) {

@@ -141,6 +141,7 @@ assert.strictEqual(getPresetDisplayName("Bulle = normale"), "Bulle = normale");
   assert.strictEqual(textStyle.fontName, "CC Wild Words");
   assert.strictEqual(textStyle.fontStyleName, "Roman");
   assert.strictEqual(textStyle.size, 11.5);
+  assert.strictEqual(textStyle.baselineDirection, "withStream", "new styles have Standard Vertical Roman Alignment on");
   assert.strictEqual(textStyle.impliedFontSize, 11.5);
   assert.strictEqual(textStyle.verticalScale, 95, "float noise is rounded away");
   assert.strictEqual(textStyle.syntheticItalic, true);
